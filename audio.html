@@ -154,7 +154,7 @@
         let allParagraphs = []; // Paragraphs of the currently loaded chapter
         let currentIndex = 0; // Current paragraph index within the loaded chapter
         let currentChapterIndex = 0; // Index of the currently loaded chapter in `chapters` array
-        let isPlaying = false; // Controls auto-advance for paragraphs (timer)
+        let isPlaying = true; // Controls auto-advance for paragraphs (timer)
         let isSpeaking = false; // Controls if speech is currently active
         let intervalId = null;
         const displayInterval = 5000; // 5 seconds between paragraphs for auto-advance
