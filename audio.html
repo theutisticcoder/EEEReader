@@ -510,7 +510,7 @@
 
             isPlaying = true;
             // If auto-advance was active, restart the interval (unless speech takes over)
-            if (isPlaying && !isSpeaking) {
+            if (isPlaying) {
                 startReading(); // This will clear and restart the interval
             }
         }
