@@ -402,8 +402,6 @@
         async function loadChapter(chapterIndex) {
             if (chapterIndex < 0 || chapterIndex >= chapters.length) return;
 
-            stopSpeech(); // Stop speech immediately when changing chapters
-            pauseReading(); // Also pause auto-advance
 
             currentChapterIndex = chapterIndex;
             currentIndex = 0; // Always start at the beginning of the new chapter
