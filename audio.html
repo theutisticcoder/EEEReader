@@ -488,6 +488,8 @@
             incrementTotalWordsRead(currentParagraphHTML); // Increment total words read for this paragraph
 
             saveCurrentBookSpot(); // Save spot for the current book
+            isPlaying = true;
+            isSpeaking = true; // Reset speaking state when displaying new content
             updateStatus();
         }
 
@@ -509,7 +511,6 @@
                 }
             }
             displayCurrentParagraph(); // Update display
-            isPlaying = true;
             // If auto-advance was active, restart the interval (unless speech takes over)
             if (isPlaying && !isSpeaking) {
                 startReading(); // This will clear and restart the interval
