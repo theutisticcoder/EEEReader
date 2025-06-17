@@ -1,11 +1,23 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>EEEReader Audio</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 20px; }
-        #message { margin-top: 10px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; display: none; }
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        #message {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            display: none;
+        }
+
         #output {
             white-space: pre-wrap;
             word-wrap: break-word;
@@ -19,12 +31,43 @@
             font-size: 1.1em;
             line-height: 1.6;
         }
-        #controls, #ttsControls { margin-top: 15px; display: flex; align-items: center; flex-wrap: wrap;}
-        #controls button, #ttsControls button { padding: 8px 15px; margin-right: 10px; margin-bottom: 5px; cursor: pointer; }
-        #ttsControls select, #ttsControls input[type="range"] { margin-right: 10px; margin-bottom: 5px; }
-        #status { margin-top: 10px; font-weight: bold; }
-        #wordsReadDiv { margin-top: 10px; font-style: italic; color: #555; }
-        input[type="file"] { margin-right: 10px; }
+
+        #controls,
+        #ttsControls {
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        #controls button,
+        #ttsControls button {
+            padding: 8px 15px;
+            margin-right: 10px;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+
+        #ttsControls select,
+        #ttsControls input[type="range"] {
+            margin-right: 10px;
+            margin-bottom: 5px;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        #wordsReadDiv {
+            margin-top: 10px;
+            font-style: italic;
+            color: #555;
+        }
+
+        input[type="file"] {
+            margin-right: 10px;
+        }
 
         #chapterNav {
             margin-top: 20px;
@@ -35,6 +78,7 @@
             overflow-y: auto;
             display: none;
         }
+
         #chapterNav button {
             display: block;
             width: 100%;
@@ -50,9 +94,11 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+
         #chapterNav button:hover {
             background-color: #d0d0d0;
         }
+
         #chapterNav button.active {
             background-color: #4CAF50;
             color: white;
@@ -67,6 +113,7 @@
             max-height: 250px;
             overflow-y: auto;
         }
+
         .saved-book-item {
             display: flex;
             justify-content: space-between;
@@ -74,13 +121,16 @@
             padding: 5px 0;
             border-bottom: 1px dotted #ddf;
         }
+
         .saved-book-item:last-child {
             border-bottom: none;
         }
+
         .saved-book-item span {
             flex-grow: 1;
             padding-right: 10px;
         }
+
         .saved-book-item button {
             margin-left: 5px;
             padding: 5px 10px;
@@ -89,11 +139,13 @@
         .highlighted-word {
             background-color: yellow;
         }
+
         .currently-speaking {
             background-color: lightblue;
         }
     </style>
 </head>
+
 <body>
     <h1>EPUB Paragraph Reader</h1>
 
@@ -105,7 +157,7 @@
     <div id="savedBooksList">
         <h2>Your Saved Books:</h2>
         <div id="savedBooksContainer">
-            </div>
+        </div>
         <button onclick="clearAllSavedBooks()" style="margin-top: 10px;">Clear All Saved Books</button>
     </div>
 
@@ -139,7 +191,7 @@
 
     <div id="chapterNav">
         <h2>Chapters:</h2>
-        </div>
+    </div>
 
     <div id="output"></div>
 
@@ -411,6 +463,9 @@
             displayCurrentParagraph(); // Update main display with first paragraph of new chapter
             highlightActiveChapterButton(); // Update chapter button highlight
             saveCurrentBookSpot(); // Save the new chapter and paragraph spot for this book
+            startReading(); // This will clear and restart the interval
+            document.getElementById('playAudioButton').disabled = false; // Enable play audio button
+            playCurrentParagraphAudio(); // Start speaking the current paragraph     
         }
 
         // --- Paragraph Display and Navigation ---
@@ -507,8 +562,8 @@
             displayCurrentParagraph(); // Update display
 
             // If auto-advance was active, restart the interval (unless speech takes over)
-                startReading(); // This will clear and restart the interval
-    document.getElementById('playAudioButton').disabled = false; // Enable play audio button
+            startReading(); // This will clear and restart the interval
+            document.getElementById('playAudioButton').disabled = false; // Enable play audio button
             playCurrentParagraphAudio(); // Start speaking the current paragraph            
         }
 
@@ -530,7 +585,7 @@
             displayCurrentParagraph(); // Update display
             // If auto-advance was active, restart the interval (unless speech takes over)
             if (isPlaying && !isSpeaking) {
-                 startReading(); // This will clear and restart the interval
+                startReading(); // This will clear and restart the interval
             }
         }
 
@@ -647,8 +702,8 @@
             const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
 
             if (englishVoices.length === 0) {
-                 console.warn("No English voices found. Displaying all available voices.");
-                 englishVoices.push(...voices); // Fallback to all voices
+                console.warn("No English voices found. Displaying all available voices.");
+                englishVoices.push(...voices); // Fallback to all voices
             }
 
             englishVoices.forEach((voice) => {
@@ -675,8 +730,8 @@
             }
             // Fallback if no specific voice selected or found
             if (!currentVoice && englishVoices.length > 0) {
-                 currentVoice = englishVoices[0];
-                 voiceSelect.value = englishVoices[0].name; // Set dropdown to the default
+                currentVoice = englishVoices[0];
+                voiceSelect.value = englishVoices[0].name; // Set dropdown to the default
             } else if (!currentVoice && voices.length > 0) {
                 currentVoice = voices[0];
                 voiceSelect.value = voices[0].name;
@@ -724,7 +779,7 @@
                     updateStatus();
                     alert(`Speech error: ${event.error}. Try a different voice or a shorter paragraph.`);
                 };
-                 // Highlight words as they are spoken
+                // Highlight words as they are spoken
                 utterance.onboundary = (event) => {
                     // Only process word boundaries
                     if (event.name === 'word') {
@@ -758,7 +813,7 @@
                                 }
                                 currentSpanCharOffset += spanText.length; // Accumulate length of spans
                                 if (i < wordsSpans.length - 1) { // Account for space between words
-                                     currentSpanCharOffset += 1; // Assuming single space for simplicity
+                                    currentSpanCharOffset += 1; // Assuming single space for simplicity
                                 }
                             }
                         }
@@ -778,7 +833,7 @@
                     utterance.voice = null; // Let system pick default if not found
                 }
             } else {
-                 utterance.voice = null; // Let system pick default if no option is selected
+                utterance.voice = null; // Let system pick default if no option is selected
             }
 
             utterance.rate = parseFloat(rateInput.value);
@@ -931,7 +986,7 @@
                     if (ncxItem) {
                         tocHref = ncxItem.getAttribute('href');
                     } else {
-                         console.warn("No standard TOC found. Using spine as chapters.");
+                        console.warn("No standard TOC found. Using spine as chapters.");
                     }
                 }
 
@@ -985,18 +1040,18 @@
                 }
 
                 if (chapters.length === 0) {
-                     const spineItems = opfDoc.querySelectorAll('spine itemref');
-                     let chapterCounter = 1;
-                     for (const itemRef of spineItems) {
-                         const idRef = itemRef.getAttribute('idref');
-                         const href = idToHrefMap.get(idRef);
-                         if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
-                             const cleanHref = resolvePath(opfBaseDir, href).split('#')[0];
-                             if (!chapters.some(ch => ch.href === cleanHref)) {
+                    const spineItems = opfDoc.querySelectorAll('spine itemref');
+                    let chapterCounter = 1;
+                    for (const itemRef of spineItems) {
+                        const idRef = itemRef.getAttribute('idref');
+                        const href = idToHrefMap.get(idRef);
+                        if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
+                            const cleanHref = resolvePath(opfBaseDir, href).split('#')[0];
+                            if (!chapters.some(ch => ch.href === cleanHref)) {
                                 chapters.push({ title: `Chapter ${chapterCounter++}`, href: cleanHref, rawParagraphs: [] });
-                             }
-                         }
-                     }
+                            }
+                        }
+                    }
                 }
 
                 for (let i = 0; i < chapters.length; i++) {
@@ -1195,11 +1250,11 @@
                         const fileInfo = JSON.parse(lastSelectedInfo);
                         const lastBookId = generateBookId(fileInfo);
                         bookToAutoLoad = savedBooks.find(b => b.id === lastBookId);
-                    } catch(e) {
+                    } catch (e) {
                         console.warn("Failed to parse old lastSelectedEpubFile, auto-loading first book.", e);
                     }
                 }
-                
+
                 // If not found (e.g., deleted, or never auto-loaded before), just load the first book
                 if (!bookToAutoLoad) {
                     bookToAutoLoad = savedBooks[0];
@@ -1227,4 +1282,5 @@
         });
     </script>
 </body>
+
 </html>
