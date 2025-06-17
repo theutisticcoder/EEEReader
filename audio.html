@@ -807,7 +807,6 @@
         function playCurrentParagraphAudio() {
             if (allParagraphs.length === 0 || window.speechSynthesis.speaking) return;
 
-            pauseReading(); // Pause auto-advance when starting speech
 
             const currentParagraphText = outputDiv.textContent || outputDiv.innerText || '';
             if (!currentParagraphText.trim()) {
