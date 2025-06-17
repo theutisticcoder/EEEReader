@@ -24,7 +24,7 @@
 
 <body>
     <input type="file" id="epubFile" accept=".epub">
-    <button onclick="extractEpubContent()">Extract Paragraphs</button>
+    <button onclick="processEpub()">Extract Paragraphs</button>
     <div id="output"></div>
 
     <script>
@@ -58,117 +58,47 @@
                 document.getElementById('output').innerHTML = 'No paragraphs found. Please process an EPUB file first.';
             }
         }
-        async function extractEpubContent() {
+        async function processEpub() {
             const fileInput = document.getElementById('epubFile');
             const outputDiv = document.getElementById('output');
-            outputDiv.innerHTML = 'Loading...';
+            outputDiv.innerHTML = 'Loading EPUB...';
 
-            const file = fileInput.files[0];
-            if (!file) {
+            if (!fileInput.files.length) {
                 outputDiv.innerHTML = 'Please select an EPUB file.';
                 return;
             }
 
-            try {
-                const reader = new FileReader();
-                reader.onload = async (e) => {
-                    const arrayBuffer = e.target.result;
-                    const zip = await JSZip.loadAsync(arrayBuffer);
+            const file = fileInput.files[0];
+            const reader = new FileReader();
 
-                    let opfPath = null;
-                    const paragraphs = [];
-                    const htmlFilesContent = {}; // Store HTML content by path
+            reader.onload = async (e) => {
 
-                    // Step 1: Find container.xml
-                    const containerFile = zip.file('META-INF/container.xml');
-                    if (!containerFile) {
-                        throw new Error('META-INF/container.xml not found.');
-                    }
-                    const containerXml = await containerFile.async('text');
 
-                    // Parse container.xml to find the OPF file path
-                    const domParser = new DOMParser();
-                    const containerDoc = domParser.parseFromString(containerXml, 'application/xml');
-                    const rootfileElement = containerDoc.querySelector('rootfile[media-type="application/oebps-package+xml"]');
+                const xhtmlFiles = Object.keys(zip.files).filter(name => name.endsWith('.xhtml') || name.endsWith('.html'));
 
-                    if (rootfileElement) {
-                        opfPath = rootfileElement.getAttribute('full-path');
-                    } else {
-                        throw new Error('OPF file not found in container.xml.');
-                    }
+                for (const filename of xhtmlFiles) {
+                    const file = zip.files[filename];
+                    const content = await file.async('string');
 
-                    if (!opfPath) {
-                        throw new Error('OPF file path is empty.');
-                    }
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(content, 'application/xhtml+xml');
+                    const pTags = doc.querySelectorAll('p');
 
-                    // Determine the base directory for content files
-                    const opfBaseDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
-
-                    // Step 2: Read content.opf
-                    const opfFile = zip.file(opfPath);
-                    if (!opfFile) {
-                        throw new Error(`OPF file not found at ${opfPath}`);
-                    }
-                    const opfXml = await opfFile.async('text');
-                    const opfDoc = domParser.parseFromString(opfXml, 'application/xml');
-
-                    // Step 3: Get HTML files from manifest
-                    const manifestItems = opfDoc.querySelectorAll('manifest item');
-                    const htmlFileHrefs = new Map(); // id -> href
-
-                    manifestItems.forEach(item => {
-                        const mediaType = item.getAttribute('media-type');
-                        const id = item.getAttribute('id');
-                        const href = item.getAttribute('href');
-                        if (mediaType === 'application/xhtml+xml' || mediaType === 'text/html') {
-                            htmlFileHrefs.set(id, href);
-                        }
+                    pTags.forEach(p => {
+                        const text = p.textContent.trim();
+                        if (text) paragraphs.push(text);
                     });
+                }
 
-                    // Step 4: Get reading order from spine
-                    const spineItemRefs = opfDoc.querySelectorAll('spine itemref');
-                    const readingOrder = Array.from(spinesItemRefs).map(itemref => itemref.getAttribute('idref'));
-
-                    // Step 5: Extract content from HTML files in reading order
-                    for (const idref of readingOrder) {
-                        const htmlRelativePath = htmlFileHrefs.get(idref);
-                        if (htmlRelativePath) {
-                            const fullHtmlPath = opfBaseDir + htmlRelativePath;
-                            const htmlFile = zip.file(fullHtmlPath);
-
-                            if (htmlFile) {
-                                const htmlContent = await htmlFile.async('text');
-                                // Parse the HTML content using DOMParser
-                                const htmlDoc = domParser.parseFromString(htmlContent, 'text/html');
-
-                                // Extract paragraphs
-                                const pTags = htmlDoc.querySelectorAll('p');
-                                pTags.forEach(p => {
-                                    const text = p.textContent.trim();
-                                    if (text) {
-                                        paragraphs.push(`<p>${text}</p>`);
-                                    }
-                                });
-                                localStorage.setItem('paragraphs', JSON.stringify(paragraphs));
-                                setTimeout(() => read(paragraphs), 5000); // Start reading after 5 seconds
-                            } else {
-                                console.warn(`HTML file not found in zip: ${fullHtmlPath}`);
-                            }
-                        } else {
-                            console.warn(`ItemRef ID '${idref}' not found in manifest.`);
-                        }
-                    }
+                localStorage.setItem('paragraphs', JSON.stringify(paragraphs));
+                setTimeout(() => read(paragraphs), 5000); // Start reading after 5 seconds
 
 
-                };
-                reader.readAsArrayBuffer(file);
 
-            } catch (error) {
-                outputDiv.innerHTML = `Error: ${error.message}`;
-                console.error('Error processing EPUB:', error);
-            }
+
+            };
+            reader.readAsArrayBuffer(file);
         }
-
         var reading = false
         document.onkeydown = (e) => {
             if (e.key === " ") {
