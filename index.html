@@ -58,8 +58,8 @@
                 document.getElementById('output').innerHTML = 'No paragraphs found. Please process an EPUB file first.';
             }
         }
+        var paragraphs = [];
         async function processEpub() {
-            var paragraphs = [];
             const fileInput = document.getElementById('epubFile');
             const outputDiv = document.getElementById('output');
             outputDiv.innerHTML = 'Loading EPUB...';
