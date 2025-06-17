@@ -492,7 +492,6 @@
 
         /** Moves to and displays the next paragraph or chapter. */
         function showNextParagraph() {
-            stopSpeech(); // Stop speech when manually advancing
             if (currentIndex < allParagraphs.length - 1) {
                 currentIndex++;
             } else {
