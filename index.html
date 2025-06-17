@@ -10,6 +10,26 @@
     <div id="output"></div>
 
     <script>
+        var num = 0;
+        function read(book){
+        document.getElementById('output').innerHTML = book[num];
+        num++;
+        if (num >= book.length) {
+            num = 0; // Reset to the first paragraph after reaching the end
+        
+        }
+        else {
+            setTimeout(function() { read(book); }, 3000); // Change paragraph every 3 seconds
+        }
+    }
+    function loadParagraphs() {
+            const paragraphs = JSON.parse(localStorage.getItem('paragraphs') || '[]');
+            if (paragraphs.length > 0) {
+                setTimeout(() => read(paragraphs), 5000); // Start reading after 5 seconds
+            } else {
+                document.getElementById('output').innerHTML = 'No paragraphs found. Please process an EPUB file first.';
+            }
+        }
         async function processEpub() {
             const fileInput = document.getElementById('epubFile');
             const outputDiv = document.getElementById('output');
@@ -42,16 +62,16 @@
                                     paragraphs.push(`<p>${text}</p>`);
                                 }
                             });
+                            localStorage.setItem('paragraphs', JSON.stringify(paragraphs));
+                            setTimeout(() => read(paragraphs), 5000); // Start reading after 5 seconds
+
                         }
-                        // Once all sections are processed (you might need a counter or Promise.all)
-                        // This simple example just logs as sections load
-                        outputDiv.innerHTML = `<pre>${paragraphs.join('\n')}</pre>`;
+                        
                     }).catch(error => {
                         console.error('Error loading section:', error);
                     });
                 });
             };
-
             reader.readAsArrayBuffer(file);
         }
     </script>
