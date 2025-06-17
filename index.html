@@ -72,7 +72,7 @@
             const reader = new FileReader();
 
             reader.onload = async (e) => {
-
+      zip = await JSZip.loadAsync(e.target.result);
 
                 const xhtmlFiles = Object.keys(zip.files).filter(name => name.endsWith('.xhtml') || name.endsWith('.html'));
 
