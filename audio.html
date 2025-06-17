@@ -690,6 +690,12 @@
                 event.preventDefault(); // Prevent scrolling down 
                 document.getElementById('playAudioButton').click(); // Trigger play/pause audio           
                 }
+                else if (event.key === 'ArrowRight') {
+                    document.getElementById('nextButton').click(); // Trigger next paragraph
+                }
+                else if (event.key === 'ArrowLeft') {
+                    document.getElementById('prevButton').click(); // Trigger previous paragraph
+                }   
         });
 
         // --- Web Speech API (TTS) Functions ---
