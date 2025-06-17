@@ -891,8 +891,11 @@
         function togglePlayAudio() {
             if (isSpeaking) { // If currently speaking, stop
                 stopSpeech();
+                isSpeaking = false;
             } else { // If not speaking, play
+                
                 playCurrentParagraphAudio();
+                isSpeaking = true;
             }
         }
 
