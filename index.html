@@ -379,12 +379,6 @@
             isPlaying = true;
             updateStatus();
             displayCurrentParagraph();
-
-            setTimeout(() => {
-                if (isPlaying) {
-                    intervalId = setInterval(showNextParagraph, displayInterval);
-                }
-            }, initialDelay);
         }
 
         function pauseReading() {
