@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Audio EEEReader</title>
+    <title>EEEReader Audio</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body { font-family: sans-serif; margin: 20px; }
@@ -154,14 +154,14 @@
         let allParagraphs = []; // Paragraphs of the currently loaded chapter
         let currentIndex = 0; // Current paragraph index within the loaded chapter
         let currentChapterIndex = 0; // Index of the currently loaded chapter in `chapters` array
-        let isPlaying = false; // Controls auto-advance for paragraphs (timer)
-        let isSpeaking = false; // Controls if speech is currently active
-        let intervalId = null;
-        const displayInterval = 5000; // 5 seconds between paragraphs for auto-advance
-        const initialDelay = 2000; // 2 seconds before starting auto-advance
+        let isPlaying = false; // Controls auto-advance for paragraphs (timer-based)
+        let isSpeaking = false; // Controls if speech is currently active (audio-based)
+        let intervalId = null; // ID for the setInterval timer
+        const displayInterval = 5000; // 5 seconds between paragraphs for timer auto-advance
+        const initialDelay = 2000; // 2 seconds before starting timer auto-advance
 
         let totalWordsRead = 0; // Accumulates across all books and sessions
-        let chapters = []; // Chapters of the CURRENTLY ACTIVE book
+        let chapters = []; // Chapters data of the CURRENTLY ACTIVE book
 
         // --- Web Speech API (TTS) related variables ---
         let utterance = null;
@@ -224,7 +224,6 @@
                 basePath += '/';
             }
             try {
-                // Using 'dummy://' scheme to allow URL constructor to resolve relative file paths
                 const resolvedUrl = new URL(relativePath, 'dummy://' + basePath);
                 let path = resolvedUrl.pathname;
                 if (path.startsWith('/')) path = path.substring(1); // Remove leading slash for ZIP entry names
@@ -403,7 +402,7 @@
             if (chapterIndex < 0 || chapterIndex >= chapters.length) return;
 
             stopSpeech(); // Stop speech immediately when changing chapters
-            pauseReading(); // Also pause auto-advance
+            pauseReading(); // Also pause auto-advance timer
 
             currentChapterIndex = chapterIndex;
             currentIndex = 0; // Always start at the beginning of the new chapter
@@ -437,7 +436,6 @@
             const plainText = tempDiv.textContent || tempDiv.innerText || '';
 
             // This regex attempts to split by word boundaries, including punctuation attached to words.
-            // It's a simplification, robust tokenization is complex.
             const words = plainText.match(/\b(\w+)\b|[^\s\w]+/g) || [];
 
             let htmlWithSpans = '';
@@ -447,7 +445,7 @@
                 const word = words[i];
                 const originalIndex = plainText.indexOf(word, charIndex);
 
-                if (originalIndex === -1) { // Fallback, shouldn't happen
+                if (originalIndex === -1) { // Fallback, shouldn't happen with robust regex
                     htmlWithSpans += word;
                     charIndex += word.length;
                     continue;
@@ -493,14 +491,14 @@
 
         /** Moves to and displays the next paragraph or chapter. */
         function showNextParagraph() {
-            stopSpeech(); // Stop speech when manually advancing
+            stopSpeech(); // Stop speech when manually advancing or preparing for next paragraph
             if (currentIndex < allParagraphs.length - 1) {
                 currentIndex++;
             } else {
                 // End of current chapter, try to go to next chapter
                 if (currentChapterIndex < chapters.length - 1) {
                     loadChapter(currentChapterIndex + 1); // loadChapter will handle display
-                    return;
+                    return; // Exit to prevent calling displayCurrentParagraph twice
                 } else {
                     // End of book
                     pauseReading(); // Stop auto-advance
@@ -509,7 +507,7 @@
                 }
             }
             displayCurrentParagraph(); // Update display
-            // If auto-advance was active, restart the interval (unless speech takes over)
+            // If auto-advance (timer-based) was active and speech is not, restart the interval
             if (isPlaying && !isSpeaking) {
                 startReading(); // This will clear and restart the interval
             }
@@ -531,7 +529,7 @@
                 }
             }
             displayCurrentParagraph(); // Update display
-            // If auto-advance was active, restart the interval (unless speech takes over)
+            // If auto-advance (timer-based) was active and speech is not, restart the interval
             if (isPlaying && !isSpeaking) {
                  startReading(); // This will clear and restart the interval
             }
@@ -539,7 +537,7 @@
 
         // --- Reading Controls ---
 
-        /** Initiates or restarts the auto-advance reading mode. */
+        /** Initiates or restarts the timer-based auto-advance reading mode. */
         function startReading() {
             if (isPlaying || allParagraphs.length === 0) return;
 
@@ -564,7 +562,7 @@
             }, initialDelay);
         }
 
-        /** Pauses the auto-advance reading mode. */
+        /** Pauses the timer-based auto-advance reading mode. */
         function pauseReading() {
             if (!isPlaying) return;
             isPlaying = false;
@@ -574,7 +572,7 @@
             updateStatus();
         }
 
-        /** Resumes the auto-advance reading mode. */
+        /** Resumes the timer-based auto-advance reading mode. */
         function resumeReading() {
             if (isPlaying || allParagraphs.length === 0) return;
             isPlaying = true;
@@ -584,22 +582,22 @@
             intervalId = setInterval(showNextParagraph, displayInterval);
         }
 
-        /** Toggles between pause and resume for either speech or auto-advance. */
+        /** Toggles between pause and resume for either speech or timer-based auto-advance. */
         function togglePauseResume() {
             if (allParagraphs.length === 0) return;
 
-            // If speaking, spacebar pauses/resumes speech directly
+            // If speech is currently playing or paused, the spacebar controls speech
             if (window.speechSynthesis.speaking || window.speechSynthesis.paused) {
                 if (window.speechSynthesis.paused) {
                     window.speechSynthesis.resume();
-                    isSpeaking = true;
+                    isSpeaking = true; // Ensure state is correct
                 } else {
                     window.speechSynthesis.pause();
                     isSpeaking = false;
                 }
                 updateStatus();
             } else {
-                // Otherwise, it controls the auto-advance timer
+                // Otherwise, spacebar controls the timer-based auto-advance
                 if (isPlaying) {
                     pauseReading();
                 } else {
@@ -617,7 +615,7 @@
                 currentChapterIndex = 0;
                 currentIndex = 0;
                 saveCurrentBookSpot(); // Update saved spot in localStorage
-                loadChapter(0); // Reload first chapter
+                loadChapter(0); // Reload first chapter to update display
             }
         }
 
@@ -633,7 +631,7 @@
         // --- Keyboard Listener for Spacebar ---
         document.addEventListener('keydown', (event) => {
             if (event.code === 'Space') {
-                event.preventDefault(); // Prevent scrolling down
+                event.preventDefault(); // Prevent default browser action (scrolling)
                 togglePauseResume();
             }
         });
@@ -671,7 +669,6 @@
                 const savedVoiceOption = Array.from(voiceSelect.options).find(option => option.value === savedTtsSettings.voiceName);
                 if (savedVoiceOption) {
                     voiceSelect.value = savedVoiceOption.value;
-                    // Find the actual voice object based on name and lang
                     currentVoice = voices.find(v => v.name === savedVoiceOption.value && v.lang === savedVoiceOption.dataset.lang);
                 }
             }
@@ -714,10 +711,8 @@
                     isSpeaking = false;
                     clearHighlights();
                     updateStatus();
-                    // When speech ends, automatically advance to next paragraph if auto-advance is enabled
-                    if (isPlaying) {
-                        showNextParagraph();
-                    }
+                    // When speech ends, automatically advance to next paragraph
+                    showNextParagraph(); // This is the core change for auto-skip
                 };
                 utterance.onerror = (event) => {
                     console.error('SpeechSynthesisUtterance.onerror', event);
@@ -737,30 +732,24 @@
                         let wordEnd = spokenText.indexOf(' ', wordStart);
                         if (wordEnd === -1) wordEnd = spokenText.length;
 
-                        // Get the spoken word from the utterance text (this might include punctuation)
-                        const spokenWord = spokenText.substring(wordStart, wordEnd);
-
                         // Find the corresponding span in the output div using data-word-index
-                        // This relies on `getParagraphWithSpans` correctly mapping.
-                        // For simplicity, we just highlight the current charIndex span.
                         const wordsSpans = outputDiv.querySelectorAll('span[data-word-index]');
                         if (wordsSpans.length > 0) {
-                            // The `onboundary` `charIndex` is for the utterance text.
-                            // We need to find the span whose text covers this `charIndex`.
                             let currentSpanCharOffset = 0;
                             for (let i = 0; i < wordsSpans.length; i++) {
                                 const span = wordsSpans[i];
                                 const spanText = span.textContent;
+                                // Check if the event's charIndex falls within this span's text range
                                 if (wordStart >= currentSpanCharOffset && wordStart < currentSpanCharOffset + spanText.length) {
                                     span.classList.add('currently-speaking');
                                     currentHighlightedWordSpan = span;
-                                    // Optional: Scroll to make the word visible if it's out of view
                                     span.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                                     break;
                                 }
-                                currentSpanCharOffset += spanText.length; // Accumulate length of spans
-                                if (i < wordsSpans.length - 1) { // Account for space between words
-                                     currentSpanCharOffset += 1; // Assuming single space for simplicity
+                                currentSpanCharOffset += spanText.length;
+                                // Account for space between words if current span is not the last
+                                if (i < wordsSpans.length - 1) {
+                                     currentSpanCharOffset += 1; // Assuming single space
                                 }
                             }
                         }
@@ -777,10 +766,10 @@
                     utterance.voice = currentVoice;
                 } else {
                     console.warn(`Selected voice '${selectedVoiceName}' not found.`);
-                    utterance.voice = null; // Let system pick default if not found
+                    utterance.voice = null;
                 }
             } else {
-                 utterance.voice = null; // Let system pick default if no option is selected
+                 utterance.voice = null;
             }
 
             utterance.rate = parseFloat(rateInput.value);
@@ -806,7 +795,7 @@
         function playCurrentParagraphAudio() {
             if (allParagraphs.length === 0 || window.speechSynthesis.speaking) return;
 
-            pauseReading(); // Pause auto-advance when starting speech
+            pauseReading(); // Pause timer-based auto-advance when starting speech
 
             const currentParagraphText = outputDiv.textContent || outputDiv.innerText || '';
             if (!currentParagraphText.trim()) {
@@ -817,7 +806,7 @@
             window.speechSynthesis.cancel(); // Cancel any previous speech
             clearHighlights(); // Ensure no leftover highlights
 
-            updateTtsUtteranceSettings(); // Apply current settings
+            updateTtsUtteranceSettings(); // Apply current settings to utterance
             utterance.text = currentParagraphText;
 
             window.speechSynthesis.speak(utterance);
@@ -837,9 +826,9 @@
 
         /** Toggles between playing and stopping audio for the current paragraph. */
         function togglePlayAudio() {
-            if (isSpeaking) { // If currently speaking, stop
+            if (isSpeaking || window.speechSynthesis.speaking || window.speechSynthesis.paused) {
                 stopSpeech();
-            } else { // If not speaking, play
+            } else {
                 playCurrentParagraphAudio();
             }
         }
@@ -855,8 +844,8 @@
             messageDiv.style.display = 'none';
             disableControls();
             pauseReading();
-            stopSpeech(); // Ensure speech is stopped
-            clearReaderDisplay(); // Clear any previous book's display
+            stopSpeech();
+            clearReaderDisplay();
 
             const fileInput = document.getElementById('epubFile');
             if (!fileInput.files.length) {
@@ -879,14 +868,13 @@
             if (existingBook) {
                 messageDiv.innerHTML = `<p>Book "<strong>${fileInfo.name}</strong>" is already saved. Loading from your last spot.</p>`;
                 messageDiv.style.display = 'block';
-                await loadBookDataIntoReader(existingBook); // Directly load from saved data
-                fileInput.value = ''; // Clear file input after loading
+                await loadBookDataIntoReader(existingBook);
+                fileInput.value = '';
                 return;
             }
 
-            // If it's a new book, proceed with parsing
-            activeBookId = null; // Clear active book ID until successfully processed
-            chapters = []; // Reset chapters for new parse
+            activeBookId = null;
+            chapters = [];
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
@@ -894,7 +882,7 @@
                 await zip.loadAsync(arrayBuffer);
 
                 let opfPath = null;
-                let opfBaseDir = ''; // Directory of content.opf within the zip
+                let opfBaseDir = '';
 
                 const containerXmlFile = zip.file('META-INF/container.xml');
                 if (!containerXmlFile) throw new Error("META-INF/container.xml not found.");
@@ -1027,21 +1015,18 @@
                 chapters = chapters.filter(ch => ch.rawParagraphs && ch.rawParagraphs.length > 0);
 
                 if (chapters.length > 0) {
-                    // Create the new book object
                     const newBook = {
                         id: newBookId,
                         metadata: fileInfo,
                         chapters: chapters,
-                        lastReadSpot: { chapterIndex: 0, paragraphIndex: 0 } // Default to start of book
+                        lastReadSpot: { chapterIndex: 0, paragraphIndex: 0 }
                     };
 
-                    // Add this new book to the saved books list
                     savedBooks.push(newBook);
                     saveBooks(savedBooks);
 
-                    // Load this newly processed book into the reader
                     await loadBookDataIntoReader(newBook);
-                    fileInput.value = ''; // Clear file input after processing
+                    fileInput.value = '';
                 } else {
                     outputDiv.textContent = "No readable chapters or paragraphs found in this EPUB.";
                     disableControls();
@@ -1063,35 +1048,32 @@
          * @param {object} book - The book object to load, containing metadata, chapters, and lastReadSpot.
          */
         async function loadBookDataIntoReader(book) {
-            pauseReading(); // Stop any currently playing book
+            pauseReading(); // Stop any currently playing book (timer-based)
             stopSpeech(); // Stop any active speech
 
             activeBookId = book.id;
             chapters = book.chapters;
 
-            // Load saved spot or default to beginning
             const spot = book.lastReadSpot || { chapterIndex: 0, paragraphIndex: 0 };
             currentChapterIndex = spot.chapterIndex;
             currentIndex = spot.paragraphIndex;
 
-            // Ensure the loaded chapter index is valid
             if (currentChapterIndex < 0 || currentChapterIndex >= chapters.length) {
                 currentChapterIndex = 0;
             }
             allParagraphs = chapters[currentChapterIndex]?.rawParagraphs || [];
 
-            // Ensure the loaded paragraph index is valid
             if (currentIndex < 0 || currentIndex >= allParagraphs.length) {
                 currentIndex = 0;
             }
 
             if (allParagraphs.length > 0) {
-                displayCurrentParagraph(); // Update reader display
-                displayChapterButtons(); // Show chapter list for this book
-                highlightActiveChapterButton(); // Highlight current chapter
-                enableControls(); // Enable reader controls
-                startButton.disabled = false; // Only enable start button initially
-                pauseResumeButton.disabled = true; // Disabled until start is pressed
+                displayCurrentParagraph();
+                displayChapterButtons();
+                highlightActiveChapterButton();
+                enableControls();
+                startButton.disabled = false;
+                pauseResumeButton.disabled = true;
             } else {
                 outputDiv.textContent = `No readable content found for "${book.metadata.name}" in saved data.`;
                 disableControls();
@@ -1103,7 +1085,7 @@
 
         /** Renders the list of saved books in the UI. */
         function renderSavedBooksList() {
-            savedBooksContainer.innerHTML = ''; // Clear current list
+            savedBooksContainer.innerHTML = '';
             const books = getSavedBooks();
 
             if (books.length === 0) {
@@ -1141,17 +1123,16 @@
             if (confirm("Are you sure you want to delete this book from your saved list?")) {
                 let books = getSavedBooks();
                 books = books.filter(book => book.id !== bookId);
-                saveBooks(books); // Save updated list
+                saveBooks(books);
 
                 if (activeBookId === bookId) {
-                    // If the deleted book was currently active, clear the reader
                     activeBookId = null;
                     allParagraphs = [];
                     chapters = [];
                     currentIndex = 0;
                     currentChapterIndex = 0;
-                    pauseReading(); // Stop any active reading
-                    stopSpeech(); // Stop speech
+                    pauseReading();
+                    stopSpeech();
                     clearReaderDisplay();
                     disableControls();
                     updateStatus();
@@ -1163,8 +1144,7 @@
         function clearAllSavedBooks() {
             if (confirm("Are you sure you want to clear ALL saved books? This cannot be undone.")) {
                 localStorage.removeItem(SAVED_BOOKS_KEY);
-                renderSavedBooksList(); // Update UI
-                // Also clear the currently active book if any
+                renderSavedBooksList();
                 activeBookId = null;
                 allParagraphs = [];
                 chapters = [];
@@ -1181,16 +1161,14 @@
         // --- Initial Application Load ---
         function initializeReader() {
             loadTotalWordsRead();
-            renderSavedBooksList(); // Display saved books list on load
-            clearReaderDisplay(); // Clear reader area initially
-            disableControls(); // Disable controls until a book is loaded
+            renderSavedBooksList();
+            clearReaderDisplay();
+            disableControls();
             updateStatus();
 
-            // Auto-load the "last used" book if available from the new saved books list
             const savedBooks = getSavedBooks();
             if (savedBooks.length > 0) {
-                // Try to find the book that was last processed
-                const lastSelectedInfo = localStorage.getItem('lastSelectedEpubFile'); // Old key for the "last processed" file
+                const lastSelectedInfo = localStorage.getItem('lastSelectedEpubFile');
                 let bookToAutoLoad = null;
 
                 if (lastSelectedInfo) {
@@ -1203,7 +1181,6 @@
                     }
                 }
                 
-                // If not found (e.g., deleted, or never auto-loaded before), just load the first book
                 if (!bookToAutoLoad) {
                     bookToAutoLoad = savedBooks[0];
                 }
@@ -1215,7 +1192,7 @@
                 }
             }
 
-            // Cleanup old localStorage keys (these are now redundant, run once then can be removed from code)
+            // Cleanup old localStorage keys (run once, then can be removed)
             localStorage.removeItem('lastSelectedEpubFile');
             localStorage.removeItem('lastProcessedEpubParagraphs');
             localStorage.removeItem('epubReaderCurrentSpot');
@@ -1225,8 +1202,8 @@
         // --- Event Listeners for Initial Load and Unload ---
         window.addEventListener('load', initializeReader);
         window.addEventListener('beforeunload', () => {
-            saveCurrentBookSpot(); // Save current book's spot when leaving the page
-            stopSpeech(); // Ensure speech is stopped when leaving the page
+            saveCurrentBookSpot();
+            stopSpeech();
         });
     </script>
 </body>
