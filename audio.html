@@ -538,7 +538,6 @@
             // Prepare paragraph for highlighting by wrapping words in spans
             outputDiv.innerHTML = getParagraphWithSpans(currentParagraphHTML);
 
-            incrementTotalWordsRead(currentParagraphHTML); // Increment total words read for this paragraph
 
             saveCurrentBookSpot(); // Save spot for the current book
             updateStatus();
@@ -546,6 +545,7 @@
 
         /** Moves to and displays the next paragraph or chapter. */
         function showNextParagraph() {
+            incrementTotalWordsRead(allParagraphs[currentIndex]); // Increment total words read for this paragraph
             if (currentIndex < allParagraphs.length - 1) {
                 currentIndex++;
             } else {
