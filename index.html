@@ -32,10 +32,10 @@
             background-color: #f0f0f0;
             max-height: 200px;
             overflow-y: auto;
-            display: none; /* Hidden by default */
+            display: none;
         }
         #chapterNav button {
-            display: block; /* Each chapter button on its own line */
+            display: block;
             width: 100%;
             text-align: left;
             padding: 8px 10px;
@@ -45,15 +45,15 @@
             border-radius: 4px;
             cursor: pointer;
             transition: background-color 0.2s;
-            white-space: nowrap; /* Prevent chapter titles from wrapping */
+            white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis; /* Add ellipsis for long titles */
+            text-overflow: ellipsis;
         }
         #chapterNav button:hover {
             background-color: #d0d0d0;
         }
         #chapterNav button.active {
-            background-color: #4CAF50; /* Highlight active chapter */
+            background-color: #4CAF50;
             color: white;
             border-color: #4CAF50;
         }
@@ -90,24 +90,24 @@
         const LAST_PROCESSED_PARAGRAPHS_KEY = 'lastProcessedEpubParagraphs';
         const CURRENT_READER_SPOT_KEY = 'epubReaderCurrentSpot';
         const TOTAL_WORDS_READ_KEY = 'totalWordsRead';
-        const CURRENT_CHAPTER_SPOT_KEY = 'epubReaderCurrentChapter'; // New key for current chapter
+        const CURRENT_CHAPTER_SPOT_KEY = 'epubReaderCurrentChapter';
 
-        let allParagraphs = []; // Paragraphs of the currently loaded chapter
-        let currentIndex = 0; // Current paragraph index within the loaded chapter
-        let currentChapterIndex = 0; // Index of the currently loaded chapter in `chapters` array
+        let allParagraphs = [];
+        let currentIndex = 0;
+        let currentChapterIndex = 0;
         let isPlaying = false;
         let intervalId = null;
-        const displayInterval = 5000; // 5 seconds
-        const initialDelay = 2000; // 2 seconds before starting
+        const displayInterval = 5000;
+        const initialDelay = 2000;
 
         let totalWordsRead = 0;
-        let chapters = []; // Array to store chapter { title, href, rawParagraphs }
+        let chapters = [];
 
         const outputDiv = document.getElementById('output');
         const messageDiv = document.getElementById('message');
         const statusDiv = document.getElementById('status');
         const wordsReadDiv = document.getElementById('wordsReadDiv');
-        const chapterNavDiv = document.getElementById('chapterNav'); // New chapter nav div
+        const chapterNavDiv = document.getElementById('chapterNav');
         const startButton = document.getElementById('startButton');
         const pauseResumeButton = document.getElementById('pauseResumeButton');
         const prevButton = document.getElementById('prevButton');
@@ -122,6 +122,31 @@
             return words.filter(word => word.length > 0).length;
         }
 
+        // --- Path Resolution Helper ---
+        // This function attempts to resolve a relative path (href) against a base path,
+        // mimicking how a browser would resolve URLs.
+        function resolvePath(basePath, relativePath) {
+            // Ensure base path ends with a slash if it's a directory
+            if (basePath.length > 0 && basePath[basePath.length - 1] !== '/') {
+                basePath += '/';
+            }
+
+            // Using URL constructor for robust path resolution
+            try {
+                // The 'dummy://' scheme allows URL constructor to work with relative file paths
+                // then we extract the pathname which should be the resolved path
+                const resolvedUrl = new URL(relativePath, 'dummy://' + basePath);
+                // Remove the 'dummy://' part and leading slash if present, and any query/hash
+                let path = resolvedUrl.pathname;
+                if (path.startsWith('/')) path = path.substring(1); // Remove leading slash for ZIP entry names
+                return path;
+            } catch (e) {
+                console.error("Path resolution error:", e, "Base:", basePath, "Relative:", relativePath);
+                return relativePath; // Fallback to original if resolution fails
+            }
+        }
+
+
         // --- UI Control Functions ---
         function enableControls() {
             startButton.disabled = false;
@@ -129,7 +154,7 @@
             prevButton.disabled = false;
             nextButton.disabled = false;
             resetSpotButton.disabled = false;
-            chapterNavDiv.style.display = 'block'; // Show chapter navigation
+            chapterNavDiv.style.display = 'block';
         }
 
         function disableControls() {
@@ -138,7 +163,7 @@
             prevButton.disabled = true;
             nextButton.disabled = true;
             resetSpotButton.disabled = true;
-            chapterNavDiv.style.display = 'none'; // Hide chapter navigation
+            chapterNavDiv.style.display = 'none';
         }
 
         function updateStatus() {
@@ -163,15 +188,13 @@
             const savedSpot = localStorage.getItem(CURRENT_READER_SPOT_KEY);
             const savedChapter = localStorage.getItem(CURRENT_CHAPTER_SPOT_KEY);
 
-            if (savedChapter !== null && allParagraphs.length > 0) {
+            if (savedChapter !== null && chapters.length > 0) {
                 const parsedChapter = parseInt(savedChapter, 10);
                 if (!isNaN(parsedChapter) && parsedChapter >= 0 && parsedChapter < chapters.length) {
                     currentChapterIndex = parsedChapter;
-                    // Now, load the paragraphs for this chapter
                     allParagraphs = chapters[currentChapterIndex].rawParagraphs || [];
-                    displayCurrentParagraph(); // Display current paragraph to update word count etc.
                 } else {
-                    currentChapterIndex = 0; // Reset chapter if invalid
+                    currentChapterIndex = 0;
                     allParagraphs = chapters[0]?.rawParagraphs || [];
                 }
             } else {
@@ -179,13 +202,12 @@
                 allParagraphs = chapters[0]?.rawParagraphs || [];
             }
 
-
-            if (savedSpot !== null && allParagraphs.length > 0) { // Check allParagraphs.length again after chapter load
+            if (savedSpot !== null && allParagraphs.length > 0) {
                 const parsedSpot = parseInt(savedSpot, 10);
                 if (!isNaN(parsedSpot) && parsedSpot >= 0 && parsedSpot < allParagraphs.length) {
                     currentIndex = parsedSpot;
                 } else {
-                    currentIndex = 0; // Reset if invalid spot
+                    currentIndex = 0;
                 }
             } else {
                 currentIndex = 0;
@@ -218,12 +240,12 @@
 
         // --- Chapter Navigation ---
         function displayChapterButtons() {
-            chapterNavDiv.innerHTML = '<h2>Chapters:</h2>'; // Clear existing
+            chapterNavDiv.innerHTML = '<h2>Chapters:</h2>';
             if (chapters.length > 0) {
                 chapters.forEach((chapter, index) => {
                     const button = document.createElement('button');
                     button.textContent = chapter.title;
-                    button.dataset.chapterIndex = index; // Store index for click handler
+                    button.dataset.chapterIndex = index;
                     button.onclick = () => loadChapter(index);
                     if (index === currentChapterIndex) {
                         button.classList.add('active');
@@ -249,21 +271,20 @@
 
         async function loadChapter(chapterIndex) {
             if (chapterIndex < 0 || chapterIndex >= chapters.length) return;
-            if (chapterIndex === currentChapterIndex) { // Already on this chapter
-                 displayCurrentParagraph(); // Just re-display if already on it
+            if (chapterIndex === currentChapterIndex && currentIndex === 0) { // Already on this chapter and at beginning
+                 displayCurrentParagraph(); // Just re-display
                  return;
             }
 
-            pauseReading(); // Pause current reading
+            pauseReading();
             currentChapterIndex = chapterIndex;
-            currentIndex = 0; // Start at the beginning of the new chapter
+            currentIndex = 0;
 
-            // Retrieve paragraphs for the new chapter
             allParagraphs = chapters[currentChapterIndex].rawParagraphs || [];
 
-            displayCurrentParagraph(); // Show first paragraph of new chapter
-            highlightActiveChapterButton(); // Update button highlight
-            saveReadingSpot(); // Save the new chapter and paragraph spot
+            displayCurrentParagraph();
+            highlightActiveChapterButton();
+            saveReadingSpot();
         }
 
         // --- Paragraph Display and Navigation ---
@@ -278,7 +299,7 @@
             const currentParagraphHTML = allParagraphs[currentIndex];
             outputDiv.innerHTML = currentParagraphHTML;
 
-            incrementTotalWordsRead(currentParagraphHTML); // Count words for this paragraph
+            incrementTotalWordsRead(currentParagraphHTML);
 
             saveReadingSpot();
             updateStatus();
@@ -288,27 +309,25 @@
             if (currentIndex < allParagraphs.length - 1) {
                 currentIndex++;
             } else {
-                // End of current chapter, try to go to next chapter
                 if (currentChapterIndex < chapters.length - 1) {
                     loadChapter(currentChapterIndex + 1);
                 } else {
-                    // End of book
                     pauseReading();
                     alert("End of book reached!");
                     currentIndex = allParagraphs.length - 1;
                 }
             }
-            displayCurrentParagraph(); // Always call to update display and status
+            displayCurrentParagraph();
         }
 
         function showPrevParagraph() {
             if (currentIndex > 0) {
                 currentIndex--;
             } else {
-                // Beginning of current chapter, try to go to previous chapter
                 if (currentChapterIndex > 0) {
                     loadChapter(currentChapterIndex - 1);
-                    currentIndex = chapters[currentChapterIndex].rawParagraphs.length - 1; // Go to end of prev chapter
+                    // Set current index to the last paragraph of the previous chapter
+                    currentIndex = chapters[currentChapterIndex].rawParagraphs.length - 1;
                 } else {
                     alert("Already at the beginning of the book!");
                 }
@@ -364,7 +383,7 @@
                 currentIndex = 0;
                 localStorage.removeItem(CURRENT_READER_SPOT_KEY);
                 localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
-                loadChapter(0); // Load first chapter
+                loadChapter(0);
             }
         }
 
@@ -376,6 +395,7 @@
             }
         }
 
+
         // --- Keyboard Listener for Spacebar ---
         document.addEventListener('keydown', (event) => {
             if (event.code === 'Space') {
@@ -384,7 +404,7 @@
             }
         });
 
-        // --- EPUB Parsing Logic (Heavily modified for chapters) ---
+        // --- EPUB Parsing Logic ---
         async function processEpub() {
             outputDiv.textContent = 'Loading EPUB...';
             messageDiv.style.display = 'none';
@@ -399,10 +419,9 @@
 
             const file = fileInput.files[0];
             allParagraphs = [];
-            chapters = []; // Reset chapters array for new book
+            chapters = [];
 
             try {
-                // Store file metadata in localStorage
                 localStorage.setItem(LAST_SELECTED_FILE_KEY, JSON.stringify({
                     name: file.name,
                     size: file.size,
@@ -418,9 +437,8 @@
                 await zip.loadAsync(arrayBuffer);
 
                 let opfPath = null;
-                let opfBaseDir = '';
+                let opfBaseDir = ''; // Directory of content.opf within the zip
 
-                // Find container.xml
                 const containerXmlFile = zip.file('META-INF/container.xml');
                 if (!containerXmlFile) throw new Error("META-INF/container.xml not found.");
                 const containerXmlContent = await containerXmlFile.async('string');
@@ -430,95 +448,84 @@
 
                 if (rootfileElement) {
                     opfPath = rootfileElement.getAttribute('full-path');
+                    // Calculate opfBaseDir correctly. If opfPath is just "content.opf", opfBaseDir should be empty string "".
+                    // If opfPath is "OEBPS/content.opf", opfBaseDir should be "OEBPS/".
                     opfBaseDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
                 } else {
                     throw new Error("OPF file not found in container.xml.");
                 }
 
-                // Load and parse content.opf
                 const opfFile = zip.file(opfPath);
                 if (!opfFile) throw new Error(`OPF file not found: ${opfPath}`);
                 const opfContent = await opfFile.async('string');
                 const opfDoc = parser.parseFromString(opfContent, 'application/xml');
 
                 const manifestItems = opfDoc.querySelectorAll('manifest item');
-                const idToHrefMap = new Map(); // id -> href (relative path)
-                const hrefToIdMap = new Map(); // href (relative path) -> id
+                const idToHrefMap = new Map();
                 manifestItems.forEach(item => {
                     const id = item.getAttribute('id');
                     const href = item.getAttribute('href');
-                    const mediaType = item.getAttribute('media-type');
                     idToHrefMap.set(id, href);
-                    hrefToIdMap.set(href, id);
                 });
 
-                // Try to find the TOC (NCX for EPUB2 or Nav Document for EPUB3)
                 let tocHref = null;
                 let isNavDoc = false;
-                // EPUB3 Nav Document: item with media-type="application/xhtml+xml" and properties="nav"
                 const navItem = opfDoc.querySelector('manifest item[properties="nav"]');
                 if (navItem) {
                     tocHref = navItem.getAttribute('href');
                     isNavDoc = true;
                 } else {
-                    // EPUB2 NCX: item with id="ncx" and media-type="application/x-dtbncx+xml"
                     const ncxItem = opfDoc.querySelector('manifest item[id="ncx"][media-type="application/x-dtbncx+xml"]');
                     if (ncxItem) {
                         tocHref = ncxItem.getAttribute('href');
                     } else {
-                         // Fallback: If no explicit TOC, use spine order as chapters
                          console.warn("No standard TOC found. Using spine as chapters.");
                     }
                 }
 
-
                 let tocContent = null;
+                let tocBaseDir = opfBaseDir; // Default to opfBaseDir
                 if (tocHref) {
-                    const tocFile = zip.file(opfBaseDir + tocHref);
+                    tocBaseDir = resolvePath(opfBaseDir, tocHref).substring(0, resolvePath(opfBaseDir, tocHref).lastIndexOf('/') + 1); // Get directory of TOC file
+                    const tocFile = zip.file(resolvePath(opfBaseDir, tocHref)); // Resolve TOC file path relative to OPF base
                     if (tocFile) {
                         tocContent = await tocFile.async('string');
                     } else {
-                        console.warn(`TOC file not found at ${opfBaseDir + tocHref}`);
+                        console.warn(`TOC file not found at ${resolvePath(opfBaseDir, tocHref)}`);
                     }
                 }
 
                 if (tocContent && isNavDoc) {
-                    // EPUB3 Nav Document parsing
-                    const navDoc = parser.parseFromString(tocContent, 'text/html'); // Nav Doc is XHTML
-                    // Find the <nav epub:type="toc"> section, and then list items within it
-                    const navToc = navDoc.querySelector('nav[epub\\:type="toc"], nav[type="toc"]'); // handle both epub:type and just type
+                    const navDoc = parser.parseFromString(tocContent, 'text/html');
+                    const navToc = navDoc.querySelector('nav[epub\\:type="toc"], nav[type="toc"]');
                     if (navToc) {
-                        const navPoints = navToc.querySelectorAll('li > a'); // Select direct links in list items
+                        const navPoints = navToc.querySelectorAll('li > a');
                         for (const navPoint of navPoints) {
                             const title = navPoint.textContent.trim();
-                            let href = navPoint.getAttribute('href');
+                            let href = navPoint.getAttribute('href'); // This href is relative to the TOC file!
                             if (href) {
-                                // Resolve path relative to TOC file
-                                href = new URL(href, new URL(tocHref, 'zip://' + opfBaseDir)).pathname.replace('zip://', '');
-                                // Clean up any fragment identifiers (e.g., #intro)
-                                const cleanHref = href.split('#')[0];
-                                if (!chapters.some(ch => ch.href === cleanHref)) { // Avoid duplicates if same file is referenced multiple times
+                                // Resolve href relative to the TOC file's directory
+                                const fullChapterHref = resolvePath(tocBaseDir, href);
+                                const cleanHref = fullChapterHref.split('#')[0];
+                                if (!chapters.some(ch => ch.href === cleanHref)) {
                                     chapters.push({ title: title, href: cleanHref, rawParagraphs: [] });
                                 }
                             }
                         }
                     }
                 } else if (tocContent && !isNavDoc) {
-                    // EPUB2 NCX parsing
                     const ncxDoc = parser.parseFromString(tocContent, 'application/xml');
-                    // NCX uses 'ncx' namespace
-                    const ncxNamespace = 'http://www.daisy.org/z3986/2005/ncx/';
                     const navPoints = ncxDoc.querySelectorAll('navPoint');
                     for (const navPoint of navPoints) {
                         const navLabel = navPoint.querySelector('navLabel text');
                         const content = navPoint.querySelector('content');
                         if (navLabel && content) {
                             const title = navLabel.textContent.trim();
-                            let src = content.getAttribute('src');
+                            let src = content.getAttribute('src'); // This src is relative to the NCX file!
                             if (src) {
-                                // Resolve path relative to NCX file
-                                src = new URL(src, new URL(tocHref, 'zip://' + opfBaseDir)).pathname.replace('zip://', '');
-                                const cleanHref = src.split('#')[0]; // Clean up fragments
+                                // Resolve src relative to the NCX file's directory
+                                const fullChapterHref = resolvePath(tocBaseDir, src);
+                                const cleanHref = fullChapterHref.split('#')[0];
                                 if (!chapters.some(ch => ch.href === cleanHref)) {
                                     chapters.push({ title: title, href: cleanHref, rawParagraphs: [] });
                                 }
@@ -533,10 +540,9 @@
                      let chapterCounter = 1;
                      for (const itemRef of spineItems) {
                          const idRef = itemRef.getAttribute('idref');
-                         const href = idToHrefMap.get(idRef);
+                         const href = idToHrefMap.get(idRef); // This href is relative to OPF file
                          if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
-                             const cleanHref = href.split('#')[0];
-                             // Avoid adding duplicates if spine references same file multiple times (unlikely but safe)
+                             const cleanHref = resolvePath(opfBaseDir, href).split('#')[0]; // Resolve relative to OPF base
                              if (!chapters.some(ch => ch.href === cleanHref)) {
                                 chapters.push({ title: `Chapter ${chapterCounter++}`, href: cleanHref, rawParagraphs: [] });
                              }
@@ -544,11 +550,11 @@
                      }
                 }
 
-                // Now, load and parse paragraphs for each chapter
+                // Now, load and parse paragraphs for each chapter based on its resolved full path
                 for (let i = 0; i < chapters.length; i++) {
                     const chapter = chapters[i];
-                    const htmlFullZipPath = opfBaseDir + chapter.href; // Path inside the ZIP
-                    const htmlFile = zip.file(htmlFullZipPath);
+                    // The chapter.href is now already the full path relative to ZIP root, thanks to resolvePath
+                    const htmlFile = zip.file(chapter.href);
 
                     if (htmlFile) {
                         const htmlContent = await htmlFile.async('string');
@@ -561,25 +567,23 @@
                                 chapterParagraphs.push(`<p>${text}</p>`);
                             }
                         });
-                        chapter.rawParagraphs = chapterParagraphs; // Store paragraphs directly in chapter object
+                        chapter.rawParagraphs = chapterParagraphs;
                     } else {
-                        console.warn(`Warning: Chapter HTML file not found in ZIP: ${htmlFullZipPath}`);
-                        chapter.rawParagraphs = []; // No paragraphs for this chapter
+                        console.warn(`Warning: Chapter HTML file not found in ZIP: ${chapter.href}`);
+                        chapter.rawParagraphs = [];
                     }
                 }
 
-                // Filter out chapters with no content (e.g., if a TOC entry pointed to an image or empty file)
                 chapters = chapters.filter(ch => ch.rawParagraphs && ch.rawParagraphs.length > 0);
 
 
                 if (chapters.length > 0) {
-                    // Store ALL chapter data (including paragraphs) for later recall
                     localStorage.setItem(LAST_PROCESSED_PARAGRAPHS_KEY, JSON.stringify(chapters));
 
-                    loadReadingSpot(); // Load saved spot (chapter and paragraph index)
-                    displayCurrentParagraph(); // Display current paragraph (will also update word count etc.)
-                    displayChapterButtons(); // Create and show chapter buttons
-                    highlightActiveChapterButton(); // Highlight the currently active chapter
+                    loadReadingSpot();
+                    displayCurrentParagraph();
+                    displayChapterButtons();
+                    highlightActiveChapterButton();
                     enableControls();
                     startButton.disabled = false;
                     pauseResumeButton.disabled = true;
@@ -609,14 +613,14 @@
             loadTotalWordsRead();
 
             const lastSelectedFileData = localStorage.getItem(LAST_SELECTED_FILE_KEY);
-            const lastProcessedChapters = localStorage.getItem(LAST_PROCESSED_PARAGRAPHS_KEY); // Now storing chapters
+            const lastProcessedChapters = localStorage.getItem(LAST_PROCESSED_PARAGRAPHS_KEY);
 
             disableControls();
 
             if (lastSelectedFileData && lastProcessedChapters) {
                 try {
                     const fileInfo = JSON.parse(lastSelectedFileData);
-                    chapters = JSON.parse(lastProcessedChapters); // Parse as chapters array
+                    chapters = JSON.parse(lastProcessedChapters);
 
                     messageDiv.innerHTML = `
                         <p>You previously processed "<strong>${fileInfo.name}</strong>" (last processed on ${new Date(fileInfo.timestamp).toLocaleString()}).</p>
@@ -625,7 +629,7 @@
                     messageDiv.style.display = 'block';
 
                     if (chapters.length > 0) {
-                        loadReadingSpot(); // Load saved chapter AND paragraph spot
+                        loadReadingSpot();
                         displayCurrentParagraph();
                         displayChapterButtons();
                         highlightActiveChapterButton();
@@ -652,9 +656,7 @@
             updateStatus();
         }
 
-        // Call this function when the page loads
         window.addEventListener('load', loadPreviousSelection);
-        // Save current spot if user closes tab/navigates away
         window.addEventListener('beforeunload', saveReadingSpot);
     </script>
 </body>
