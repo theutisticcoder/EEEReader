@@ -1,11 +1,23 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Audio EEEReader</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 20px; }
-        #message { margin-top: 10px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; display: none; }
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        #message {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            display: none;
+        }
+
         #output {
             white-space: pre-wrap;
             word-wrap: break-word;
@@ -19,12 +31,43 @@
             font-size: 1.1em;
             line-height: 1.6;
         }
-        #controls, #ttsControls { margin-top: 15px; display: flex; align-items: center; flex-wrap: wrap;}
-        #controls button, #ttsControls button { padding: 8px 15px; margin-right: 10px; margin-bottom: 5px; cursor: pointer; }
-        #ttsControls select, #ttsControls input[type="range"] { margin-right: 10px; margin-bottom: 5px; }
-        #status { margin-top: 10px; font-weight: bold; }
-        #wordsReadDiv { margin-top: 10px; font-style: italic; color: #555; }
-        input[type="file"] { margin-right: 10px; }
+
+        #controls,
+        #ttsControls {
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        #controls button,
+        #ttsControls button {
+            padding: 8px 15px;
+            margin-right: 10px;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+
+        #ttsControls select,
+        #ttsControls input[type="range"] {
+            margin-right: 10px;
+            margin-bottom: 5px;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        #wordsReadDiv {
+            margin-top: 10px;
+            font-style: italic;
+            color: #555;
+        }
+
+        input[type="file"] {
+            margin-right: 10px;
+        }
 
         #chapterNav {
             margin-top: 20px;
@@ -35,6 +78,7 @@
             overflow-y: auto;
             display: none;
         }
+
         #chapterNav button {
             display: block;
             width: 100%;
@@ -50,9 +94,11 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+
         #chapterNav button:hover {
             background-color: #d0d0d0;
         }
+
         #chapterNav button.active {
             background-color: #4CAF50;
             color: white;
@@ -62,11 +108,13 @@
         .highlighted-word {
             background-color: yellow;
         }
+
         .currently-speaking {
             background-color: lightblue;
         }
     </style>
 </head>
+
 <body>
     <h1>EPUB Paragraph Reader</h1>
 
@@ -78,7 +126,7 @@
     <div id="savedBooksList">
         <h2>Your Saved Books:</h2>
         <div id="savedBooksContainer">
-            </div>
+        </div>
         <button onclick="clearAllSavedBooks()" style="margin-top: 10px;">Clear All Saved Books</button>
     </div>
 
@@ -112,7 +160,7 @@
 
     <div id="chapterNav">
         <h2>Chapters:</h2>
-        </div>
+    </div>
 
     <div id="output"></div>
 
@@ -244,555 +292,563 @@
                 return [];
             }
         }
-
-        function saveBooks(books) {
-            localStorage.setItem(SAVED_BOOKS_KEY, JSON.stringify(books));
-            renderSavedBooksList();
-        }
-
-        function saveCurrentBookSpot() {
-            if (!activeBookId) return;
-
+        function renderSavedBooksList() {
+            savedBooksContainer.innerHTML = ''; // Clear current list
             const books = getSavedBooks();
-            const bookIndex = books.findIndex(book => book.id === activeBookId);
 
-            if (bookIndex !== -1) {
-                books[bookIndex].lastReadSpot = {
-                    chapterIndex: currentChapterIndex,
-                    paragraphIndex: currentIndex
-                };
-                saveBooks(books);
+            if (books.length === 0) {
+                savedBooksContainer.innerHTML = '<p>No books saved yet. Load an EPUB above!</p>';
+                return;
             }
-        }
+            function saveBooks(books) {
+                localStorage.setItem(SAVED_BOOKS_KEY, JSON.stringify(books));
+                renderSavedBooksList();
+            }
 
-        function loadTotalWordsRead() {
-            const savedTotalWords = localStorage.getItem(TOTAL_WORDS_READ_KEY);
-            if (savedTotalWords !== null) {
-                const parsedTotal = parseInt(savedTotalWords, 10);
-                if (!isNaN(parsedTotal) && parsedTotal >= 0) {
-                    totalWordsRead = parsedTotal;
+            function saveCurrentBookSpot() {
+                if (!activeBookId) return;
+
+                const books = getSavedBooks();
+                const bookIndex = books.findIndex(book => book.id === activeBookId);
+
+                if (bookIndex !== -1) {
+                    books[bookIndex].lastReadSpot = {
+                        chapterIndex: currentChapterIndex,
+                        paragraphIndex: currentIndex
+                    };
+                    saveBooks(books);
+                }
+            }
+
+            function loadTotalWordsRead() {
+                const savedTotalWords = localStorage.getItem(TOTAL_WORDS_READ_KEY);
+                if (savedTotalWords !== null) {
+                    const parsedTotal = parseInt(savedTotalWords, 10);
+                    if (!isNaN(parsedTotal) && parsedTotal >= 0) {
+                        totalWordsRead = parsedTotal;
+                    } else {
+                        totalWordsRead = 0;
+                    }
                 } else {
                     totalWordsRead = 0;
                 }
-            } else {
-                totalWordsRead = 0;
-            }
-            updateTotalWordsReadDisplay();
-        }
-
-        function incrementTotalWordsRead(paragraphHTML) {
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = paragraphHTML;
-            const wordsInParagraph = countWords(tempDiv.textContent || tempDiv.innerText || "");
-            totalWordsRead += wordsInParagraph;
-            localStorage.setItem(TOTAL_WORDS_READ_KEY, totalWordsRead.toString());
-            updateTotalWordsReadDisplay();
-        }
-
-        // --- Chapter Navigation ---
-        function displayChapterButtons() {
-            chapterNavDiv.innerHTML = '<h2>Chapters:</h2>';
-            if (chapters.length > 0) {
-                chapters.forEach((chapter, index) => {
-                    const button = document.createElement('button');
-                    button.textContent = chapter.title;
-                    button.dataset.chapterIndex = index;
-                    button.onclick = () => loadChapter(index);
-                    if (index === currentChapterIndex) {
-                        button.classList.add('active');
-                    }
-                    chapterNavDiv.appendChild(button);
-                });
-                chapterNavDiv.style.display = 'block';
-            } else {
-                chapterNavDiv.style.display = 'none';
-            }
-        }
-
-        function highlightActiveChapterButton() {
-            const chapterButtons = chapterNavDiv.querySelectorAll('button');
-            chapterButtons.forEach((button, index) => {
-                if (index === currentChapterIndex) {
-                    button.classList.add('active');
-                } else {
-                    button.classList.remove('active');
-                }
-            });
-        }
-
-        async function loadChapter(chapterIndex) {
-            if (chapterIndex < 0 || chapterIndex >= chapters.length) return;
-
-            stopSpeech(); // Stop speech immediately when changing chapters
-            pauseReading(); // Also pause auto-advance
-
-            currentChapterIndex = chapterIndex;
-            currentIndex = 0;
-
-            allParagraphs = chapters[currentChapterIndex].rawParagraphs || [];
-
-            displayCurrentParagraph();
-            highlightActiveChapterButton();
-            saveCurrentBookSpot();
-        }
-
-        // --- Paragraph Display and Navigation ---
-        let currentHighlightedWordSpan = null; // To track the currently highlighted word
-
-        function clearHighlights() {
-            const highlightedSpans = outputDiv.querySelectorAll('.highlighted-word, .currently-speaking');
-            highlightedSpans.forEach(span => {
-                span.classList.remove('highlighted-word', 'currently-speaking');
-            });
-            currentHighlightedWordSpan = null;
-        }
-
-        function getParagraphWithSpans(paragraphHtml) {
-            // Create a temporary div to parse the raw paragraph HTML
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = paragraphHtml;
-
-            // Get the plain text content of the paragraph
-            const plainText = tempDiv.textContent || tempDiv.innerText || '';
-
-            // Split into words (simple split, can be improved for punctuation)
-            const words = plainText.match(/\S+/g) || []; // Matches non-whitespace sequences
-
-            let htmlWithSpans = '';
-            let charIndex = 0;
-
-            // Reconstruct HTML, wrapping each word in a span
-            // This is a simplified approach. A more robust one might need to
-            // re-parse the original HTML's text nodes and wrap words in place,
-            // preserving original tags, but this is complex.
-            // For now, we'll strip existing HTML and re-wrap plain words.
-            for (let i = 0; i < words.length; i++) {
-                const word = words[i];
-                const wordWithTrailingSpace = word + ' '; // Add space back for proper layout
-
-                // Find the exact start index of this word in the plain text
-                const actualStartIndex = plainText.indexOf(word, charIndex);
-                if (actualStartIndex === -1) {
-                    // Fallback or error, shouldn't happen with match(/\S+/g)
-                    htmlWithSpans += wordWithTrailingSpace;
-                    charIndex += wordWithTrailingSpace.length;
-                    continue;
-                }
-
-                // Add any leading whitespace from the original paragraph
-                htmlWithSpans += plainText.substring(charIndex, actualStartIndex);
-
-                // Wrap the word in a span with a data-index for highlighting
-                htmlWithSpans += `<span data-word-index="${i}">${word}</span>`;
-                charIndex = actualStartIndex + word.length;
-
-                // Add trailing space if it exists
-                if (i < words.length - 1) { // Only add space if not the last word
-                    // Add the space that was matched by /\s+/
-                    htmlWithSpans += ' ';
-                    charIndex += 1;
-                }
-            }
-            // Add any remaining text after the last word
-            htmlWithSpans += plainText.substring(charIndex);
-
-            return htmlWithSpans;
-        }
-
-
-        function displayCurrentParagraph() {
-            stopSpeech(); // Always stop existing speech before displaying new content
-            clearHighlights(); // Clear highlights from previous paragraph
-
-            if (allParagraphs.length === 0) {
-                outputDiv.textContent = "No paragraphs to display for this chapter.";
-                return;
-            }
-            if (currentIndex < 0) currentIndex = 0;
-            if (currentIndex >= allParagraphs.length) currentIndex = allParagraphs.length - 1;
-
-            const currentParagraphHTML = allParagraphs[currentIndex];
-            // Prepare paragraph for highlighting by wrapping words in spans
-            outputDiv.innerHTML = getParagraphWithSpans(currentParagraphHTML);
-
-            incrementTotalWordsRead(currentParagraphHTML);
-
-            saveCurrentBookSpot();
-            updateStatus();
-        }
-
-        function showNextParagraph() {
-            stopSpeech(); // Stop speech when manually advancing
-            if (currentIndex < allParagraphs.length - 1) {
-                currentIndex++;
-            } else {
-                if (currentChapterIndex < chapters.length - 1) {
-                    loadChapter(currentChapterIndex + 1);
-                    return; // loadChapter will call displayCurrentParagraph
-                } else {
-                    pauseReading();
-                    alert("End of book reached!");
-                    currentIndex = allParagraphs.length - 1;
-                }
-            }
-            displayCurrentParagraph();
-            if (isPlaying && !isSpeaking) { // If auto-advance but not speaking, restart interval
-                startReading(); // This will restart the interval
-            }
-        }
-
-        function showPrevParagraph() {
-            stopSpeech(); // Stop speech when manually going back
-            if (currentIndex > 0) {
-                currentIndex--;
-            } else {
-                if (currentChapterIndex > 0) {
-                    loadChapter(currentChapterIndex - 1);
-                    currentIndex = chapters[currentChapterIndex].rawParagraphs.length - 1;
-                } else {
-                    alert("Already at the beginning of the book!");
-                }
-            }
-            displayCurrentParagraph();
-            if (isPlaying && !isSpeaking) { // If auto-advance but not speaking, restart interval
-                 startReading(); // This will restart the interval
-            }
-        }
-
-        // --- Reading Controls --- (Adjusted for TTS)
-        function startReading() {
-            if (isPlaying || allParagraphs.length === 0) return;
-
-            // If speech is active, pause it and rely on the auto-advance timer
-            if (isSpeaking) {
-                stopSpeech();
-            }
-
-            isPlaying = true;
-            updateStatus();
-            // Do not call displayCurrentParagraph here, as it's meant for manual changes
-            // The interval will trigger showNextParagraph which handles display
-
-            setTimeout(() => {
-                if (isPlaying) { // Check again in case user paused during delay
-                    intervalId = setInterval(showNextParagraph, displayInterval);
-                }
-            }, initialDelay);
-        }
-
-        function pauseReading() {
-            if (!isPlaying) return;
-            isPlaying = false;
-            clearInterval(intervalId);
-            intervalId = null;
-            saveCurrentBookSpot();
-            updateStatus();
-        }
-
-        function resumeReading() {
-            if (isPlaying || allParagraphs.length === 0) return;
-            isPlaying = true;
-            updateStatus();
-            // Do not call displayCurrentParagraph here
-            intervalId = setInterval(showNextParagraph, displayInterval);
-        }
-
-        function togglePauseResume() {
-            if (allParagraphs.length === 0) return;
-
-            // If speaking, spacebar pauses/resumes speech directly
-            if (isSpeaking) {
-                if (window.speechSynthesis.paused) {
-                    window.speechSynthesis.resume();
-                    isSpeaking = true; // Ensure state is correct
-                } else {
-                    window.speechSynthesis.pause();
-                    isSpeaking = false;
-                }
-                updateStatus();
-            } else {
-                // Otherwise, it controls the auto-advance timer
-                if (isPlaying) {
-                    pauseReading();
-                } else {
-                    resumeReading();
-                }
-            }
-        }
-
-        function resetReadingSpot() {
-            if (!activeBookId || chapters.length === 0) return;
-            if (confirm("Are you sure you want to reset your reading spot for this book to the beginning?")) {
-                pauseReading(); // Pause auto-advance
-                stopSpeech(); // Stop speech
-                currentChapterIndex = 0;
-                currentIndex = 0;
-                saveCurrentBookSpot();
-                loadChapter(0); // Load first chapter
-            }
-        }
-
-        function resetTotalWordsRead() {
-            if (confirm("Are you sure you want to reset the TOTAL words read across all books? This cannot be undone.")) {
-                totalWordsRead = 0;
-                localStorage.setItem(TOTAL_WORDS_READ_KEY, '0');
                 updateTotalWordsReadDisplay();
             }
-        }
 
-        // --- Keyboard Listener for Spacebar ---
-        document.addEventListener('keydown', (event) => {
-            if (event.code === 'Space') {
-                event.preventDefault();
-                togglePauseResume();
-            }
-        });
-
-        // --- Web Speech API (TTS) ---
-        function populateVoiceList() {
-            voices = window.speechSynthesis.getVoices();
-            voiceSelect.innerHTML = ''; // Clear existing options
-
-            // Filter for English voices by default, or you can present all
-            const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
-
-            if (englishVoices.length === 0) {
-                 // Fallback if no English voices, show all or a message
-                 console.warn("No English voices found. Displaying all available voices.");
-                 englishVoices.push(...voices);
+            function incrementTotalWordsRead(paragraphHTML) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = paragraphHTML;
+                const wordsInParagraph = countWords(tempDiv.textContent || tempDiv.innerText || "");
+                totalWordsRead += wordsInParagraph;
+                localStorage.setItem(TOTAL_WORDS_READ_KEY, totalWordsRead.toString());
+                updateTotalWordsReadDisplay();
             }
 
-            englishVoices.forEach((voice, i) => {
-                const option = document.createElement('option');
-                option.textContent = `${voice.name} (${voice.lang})${voice.default ? ' -- DEFAULT' : ''}`;
-                option.setAttribute('data-name', voice.name);
-                option.setAttribute('data-lang', voice.lang);
-                voiceSelect.appendChild(option);
+            // --- Chapter Navigation ---
+            function displayChapterButtons() {
+                chapterNavDiv.innerHTML = '<h2>Chapters:</h2>';
+                if (chapters.length > 0) {
+                    chapters.forEach((chapter, index) => {
+                        const button = document.createElement('button');
+                        button.textContent = chapter.title;
+                        button.dataset.chapterIndex = index;
+                        button.onclick = () => loadChapter(index);
+                        if (index === currentChapterIndex) {
+                            button.classList.add('active');
+                        }
+                        chapterNavDiv.appendChild(button);
+                    });
+                    chapterNavDiv.style.display = 'block';
+                } else {
+                    chapterNavDiv.style.display = 'none';
+                }
+            }
+
+            function highlightActiveChapterButton() {
+                const chapterButtons = chapterNavDiv.querySelectorAll('button');
+                chapterButtons.forEach((button, index) => {
+                    if (index === currentChapterIndex) {
+                        button.classList.add('active');
+                    } else {
+                        button.classList.remove('active');
+                    }
+                });
+            }
+
+            async function loadChapter(chapterIndex) {
+                if (chapterIndex < 0 || chapterIndex >= chapters.length) return;
+
+                stopSpeech(); // Stop speech immediately when changing chapters
+                pauseReading(); // Also pause auto-advance
+
+                currentChapterIndex = chapterIndex;
+                currentIndex = 0;
+
+                allParagraphs = chapters[currentChapterIndex].rawParagraphs || [];
+
+                displayCurrentParagraph();
+                highlightActiveChapterButton();
+                saveCurrentBookSpot();
+            }
+
+            // --- Paragraph Display and Navigation ---
+            let currentHighlightedWordSpan = null; // To track the currently highlighted word
+
+            function clearHighlights() {
+                const highlightedSpans = outputDiv.querySelectorAll('.highlighted-word, .currently-speaking');
+                highlightedSpans.forEach(span => {
+                    span.classList.remove('highlighted-word', 'currently-speaking');
+                });
+                currentHighlightedWordSpan = null;
+            }
+
+            function getParagraphWithSpans(paragraphHtml) {
+                // Create a temporary div to parse the raw paragraph HTML
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = paragraphHtml;
+
+                // Get the plain text content of the paragraph
+                const plainText = tempDiv.textContent || tempDiv.innerText || '';
+
+                // Split into words (simple split, can be improved for punctuation)
+                const words = plainText.match(/\S+/g) || []; // Matches non-whitespace sequences
+
+                let htmlWithSpans = '';
+                let charIndex = 0;
+
+                // Reconstruct HTML, wrapping each word in a span
+                // This is a simplified approach. A more robust one might need to
+                // re-parse the original HTML's text nodes and wrap words in place,
+                // preserving original tags, but this is complex.
+                // For now, we'll strip existing HTML and re-wrap plain words.
+                for (let i = 0; i < words.length; i++) {
+                    const word = words[i];
+                    const wordWithTrailingSpace = word + ' '; // Add space back for proper layout
+
+                    // Find the exact start index of this word in the plain text
+                    const actualStartIndex = plainText.indexOf(word, charIndex);
+                    if (actualStartIndex === -1) {
+                        // Fallback or error, shouldn't happen with match(/\S+/g)
+                        htmlWithSpans += wordWithTrailingSpace;
+                        charIndex += wordWithTrailingSpace.length;
+                        continue;
+                    }
+
+                    // Add any leading whitespace from the original paragraph
+                    htmlWithSpans += plainText.substring(charIndex, actualStartIndex);
+
+                    // Wrap the word in a span with a data-index for highlighting
+                    htmlWithSpans += `<span data-word-index="${i}">${word}</span>`;
+                    charIndex = actualStartIndex + word.length;
+
+                    // Add trailing space if it exists
+                    if (i < words.length - 1) { // Only add space if not the last word
+                        // Add the space that was matched by /\s+/
+                        htmlWithSpans += ' ';
+                        charIndex += 1;
+                    }
+                }
+                // Add any remaining text after the last word
+                htmlWithSpans += plainText.substring(charIndex);
+
+                return htmlWithSpans;
+            }
+
+
+            function displayCurrentParagraph() {
+                stopSpeech(); // Always stop existing speech before displaying new content
+                clearHighlights(); // Clear highlights from previous paragraph
+
+                if (allParagraphs.length === 0) {
+                    outputDiv.textContent = "No paragraphs to display for this chapter.";
+                    return;
+                }
+                if (currentIndex < 0) currentIndex = 0;
+                if (currentIndex >= allParagraphs.length) currentIndex = allParagraphs.length - 1;
+
+                const currentParagraphHTML = allParagraphs[currentIndex];
+                // Prepare paragraph for highlighting by wrapping words in spans
+                outputDiv.innerHTML = getParagraphWithSpans(currentParagraphHTML);
+
+                incrementTotalWordsRead(currentParagraphHTML);
+
+                saveCurrentBookSpot();
+                updateStatus();
+            }
+
+            function showNextParagraph() {
+                stopSpeech(); // Stop speech when manually advancing
+                if (currentIndex < allParagraphs.length - 1) {
+                    currentIndex++;
+                } else {
+                    if (currentChapterIndex < chapters.length - 1) {
+                        loadChapter(currentChapterIndex + 1);
+                        return; // loadChapter will call displayCurrentParagraph
+                    } else {
+                        pauseReading();
+                        alert("End of book reached!");
+                        currentIndex = allParagraphs.length - 1;
+                    }
+                }
+                displayCurrentParagraph();
+                if (isPlaying && !isSpeaking) { // If auto-advance but not speaking, restart interval
+                    startReading(); // This will restart the interval
+                }
+            }
+
+            function showPrevParagraph() {
+                stopSpeech(); // Stop speech when manually going back
+                if (currentIndex > 0) {
+                    currentIndex--;
+                } else {
+                    if (currentChapterIndex > 0) {
+                        loadChapter(currentChapterIndex - 1);
+                        currentIndex = chapters[currentChapterIndex].rawParagraphs.length - 1;
+                    } else {
+                        alert("Already at the beginning of the book!");
+                    }
+                }
+                displayCurrentParagraph();
+                if (isPlaying && !isSpeaking) { // If auto-advance but not speaking, restart interval
+                    startReading(); // This will restart the interval
+                }
+            }
+
+            // --- Reading Controls --- (Adjusted for TTS)
+            function startReading() {
+                if (isPlaying || allParagraphs.length === 0) return;
+
+                // If speech is active, pause it and rely on the auto-advance timer
+                if (isSpeaking) {
+                    stopSpeech();
+                }
+
+                isPlaying = true;
+                updateStatus();
+                // Do not call displayCurrentParagraph here, as it's meant for manual changes
+                // The interval will trigger showNextParagraph which handles display
+
+                setTimeout(() => {
+                    if (isPlaying) { // Check again in case user paused during delay
+                        intervalId = setInterval(showNextParagraph, displayInterval);
+                    }
+                }, initialDelay);
+            }
+
+            function pauseReading() {
+                if (!isPlaying) return;
+                isPlaying = false;
+                clearInterval(intervalId);
+                intervalId = null;
+                saveCurrentBookSpot();
+                updateStatus();
+            }
+
+            function resumeReading() {
+                if (isPlaying || allParagraphs.length === 0) return;
+                isPlaying = true;
+                updateStatus();
+                // Do not call displayCurrentParagraph here
+                intervalId = setInterval(showNextParagraph, displayInterval);
+            }
+
+            function togglePauseResume() {
+                if (allParagraphs.length === 0) return;
+
+                // If speaking, spacebar pauses/resumes speech directly
+                if (isSpeaking) {
+                    if (window.speechSynthesis.paused) {
+                        window.speechSynthesis.resume();
+                        isSpeaking = true; // Ensure state is correct
+                    } else {
+                        window.speechSynthesis.pause();
+                        isSpeaking = false;
+                    }
+                    updateStatus();
+                } else {
+                    // Otherwise, it controls the auto-advance timer
+                    if (isPlaying) {
+                        pauseReading();
+                    } else {
+                        resumeReading();
+                    }
+                }
+            }
+
+            function resetReadingSpot() {
+                if (!activeBookId || chapters.length === 0) return;
+                if (confirm("Are you sure you want to reset your reading spot for this book to the beginning?")) {
+                    pauseReading(); // Pause auto-advance
+                    stopSpeech(); // Stop speech
+                    currentChapterIndex = 0;
+                    currentIndex = 0;
+                    saveCurrentBookSpot();
+                    loadChapter(0); // Load first chapter
+                }
+            }
+
+            function resetTotalWordsRead() {
+                if (confirm("Are you sure you want to reset the TOTAL words read across all books? This cannot be undone.")) {
+                    totalWordsRead = 0;
+                    localStorage.setItem(TOTAL_WORDS_READ_KEY, '0');
+                    updateTotalWordsReadDisplay();
+                }
+            }
+
+            // --- Keyboard Listener for Spacebar ---
+            document.addEventListener('keydown', (event) => {
+                if (event.code === 'Space') {
+                    event.preventDefault();
+                    togglePauseResume();
+                }
             });
 
-            // Load saved TTS settings or set defaults
-            const savedTtsSettings = JSON.parse(localStorage.getItem(TTS_SETTINGS_KEY) || '{}');
-            rateInput.value = savedTtsSettings.rate || 1;
-            pitchInput.value = savedTtsSettings.pitch || 1;
-            volumeInput.value = savedTtsSettings.volume || 1;
+            // --- Web Speech API (TTS) ---
+            function populateVoiceList() {
+                voices = window.speechSynthesis.getVoices();
+                voiceSelect.innerHTML = ''; // Clear existing options
 
-            if (savedTtsSettings.voiceName) {
-                const savedVoiceOption = Array.from(voiceSelect.options).find(option => option.dataset.name === savedTtsSettings.voiceName);
-                if (savedVoiceOption) {
-                    voiceSelect.value = savedVoiceOption.value;
-                    currentVoice = voices.find(v => v.name === savedVoiceOption.dataset.name && v.lang === savedVoiceOption.dataset.lang);
+                // Filter for English voices by default, or you can present all
+                const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
+
+                if (englishVoices.length === 0) {
+                    // Fallback if no English voices, show all or a message
+                    console.warn("No English voices found. Displaying all available voices.");
+                    englishVoices.push(...voices);
                 }
-            }
-            if (!currentVoice && englishVoices.length > 0) {
-                 currentVoice = englishVoices[0]; // Default to first English voice
-                 voiceSelect.value = voiceSelect.options[0].value;
-            } else if (!currentVoice && voices.length > 0) { // If no English, default to first available
-                currentVoice = voices[0];
-                voiceSelect.value = voiceSelect.options[0].value;
-            }
 
-            // Manually trigger change to apply values
-            updateTtsUtteranceSettings();
-        }
+                englishVoices.forEach((voice, i) => {
+                    const option = document.createElement('option');
+                    option.textContent = `${voice.name} (${voice.lang})${voice.default ? ' -- DEFAULT' : ''}`;
+                    option.setAttribute('data-name', voice.name);
+                    option.setAttribute('data-lang', voice.lang);
+                    voiceSelect.appendChild(option);
+                });
 
-        // Event listener for voices loading
-        if (window.speechSynthesis) {
-            window.speechSynthesis.onvoiceschanged = populateVoiceList;
-        } else {
-            console.error("Web Speech API (Speech Synthesis) not supported in this browser.");
-            // Disable TTS related controls if not supported
-            playAudioButton.disabled = true;
-            voiceSelect.disabled = true;
-            rateInput.disabled = true;
-            pitchInput.disabled = true;
-            volumeInput.disabled = true;
-        }
+                // Load saved TTS settings or set defaults
+                const savedTtsSettings = JSON.parse(localStorage.getItem(TTS_SETTINGS_KEY) || '{}');
+                rateInput.value = savedTtsSettings.rate || 1;
+                pitchInput.value = savedTtsSettings.pitch || 1;
+                volumeInput.value = savedTtsSettings.volume || 1;
 
-
-        function updateTtsUtteranceSettings() {
-            if (!utterance) {
-                utterance = new SpeechSynthesisUtterance();
-                // Set up event listeners for utterance
-                utterance.onend = () => {
-                    isSpeaking = false;
-                    clearHighlights();
-                    updateStatus();
-                    // When speech ends, automatically advance to next paragraph if auto-advance is enabled
-                    if (isPlaying) {
-                        showNextParagraph();
+                if (savedTtsSettings.voiceName) {
+                    const savedVoiceOption = Array.from(voiceSelect.options).find(option => option.dataset.name === savedTtsSettings.voiceName);
+                    if (savedVoiceOption) {
+                        voiceSelect.value = savedVoiceOption.value;
+                        currentVoice = voices.find(v => v.name === savedVoiceOption.dataset.name && v.lang === savedVoiceOption.dataset.lang);
                     }
-                };
-                utterance.onerror = (event) => {
-                    console.error('SpeechSynthesisUtterance.onerror', event);
-                    isSpeaking = false;
-                    clearHighlights();
-                    updateStatus();
-                    alert(`Speech error: ${event.error}. Try a different voice or shorter text.`);
-                };
-                 // Highlight words as they are spoken
-                utterance.onboundary = (event) => {
-                    clearHighlights(); // Clear previous word highlight
+                }
+                if (!currentVoice && englishVoices.length > 0) {
+                    currentVoice = englishVoices[0]; // Default to first English voice
+                    voiceSelect.value = voiceSelect.options[0].value;
+                } else if (!currentVoice && voices.length > 0) { // If no English, default to first available
+                    currentVoice = voices[0];
+                    voiceSelect.value = voiceSelect.options[0].value;
+                }
 
-                    // Check if it's a word boundary
-                    if (event.name === 'word') {
-                        const text = utterance.text;
-                        const wordStart = event.charIndex;
-                        let wordEnd = text.indexOf(' ', wordStart); // Find next space
-                        if (wordEnd === -1) wordEnd = text.length; // If no space, it's the end of the text
-
-                        const spokenWord = text.substring(wordStart, wordEnd).trim();
-
-                        // Find the corresponding span in the output div
-                        const wordsSpans = outputDiv.querySelectorAll('span[data-word-index]');
-                        let matchedSpan = null;
-                        let currentWordCharCount = 0; // Cumulative char count of words already checked
-                        for(let i=0; i < wordsSpans.length; i++) {
-                            const span = wordsSpans[i];
-                            const spanText = span.textContent.trim();
-                            
-                            // Simple match: if the spoken word exactly matches a span's text content
-                            // This might need more robust logic for complex cases (punctuation, hyphenation)
-                            if (spanText === spokenWord) {
-                                matchedSpan = span;
-                                break;
-                            }
-                            // More robust: check char index
-                            // This gets complex as charIndex relates to the utterance text,
-                            // not necessarily the original HTML text after stripping.
-                            // The simplest is to match based on `event.charIndex` directly on `utterance.text`
-                            // and then find the span that covers that range.
-                            // For this demo, let's keep it simpler by relying on the 'word' event
-                            // and finding the word in the DOM.
-
-                            // Alternative: If the `onboundary` event provides `wordIndex`
-                            // Some implementations might provide a `wordIndex`
-                            // if (event.wordIndex === parseInt(span.dataset.wordIndex)) {
-                            //     matchedSpan = span;
-                            //     break;
-                            // }
-                        }
-
-                        if (matchedSpan) {
-                            matchedSpan.classList.add('currently-speaking');
-                            currentHighlightedWordSpan = matchedSpan;
-                            // Optional: Scroll to make the word visible if it's out of view
-                            // matchedSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        }
-                    }
-                };
+                // Manually trigger change to apply values
+                updateTtsUtteranceSettings();
             }
 
-            // Apply voice settings
-            currentVoice = voices[voiceSelect.selectedIndex] || voices[0];
-            if (currentVoice) {
-                utterance.voice = currentVoice;
-            }
-            utterance.rate = parseFloat(rateInput.value);
-            utterance.pitch = parseFloat(pitchInput.value);
-            utterance.volume = parseFloat(volumeInput.value);
-
-            // Save settings to localStorage
-            localStorage.setItem(TTS_SETTINGS_KEY, JSON.stringify({
-                voiceName: currentVoice ? currentVoice.name : null,
-                rate: utterance.rate,
-                pitch: utterance.pitch,
-                volume: utterance.volume
-            }));
-        }
-
-        // Add listeners for TTS controls
-        voiceSelect.addEventListener('change', updateTtsUtteranceSettings);
-        rateInput.addEventListener('input', updateTtsUtteranceSettings);
-        pitchInput.addEventListener('input', updateTtsUtteranceSettings);
-        volumeInput.addEventListener('input', updateTtsUtteranceSettings);
-
-
-        function playCurrentParagraphAudio() {
-            if (allParagraphs.length === 0 || isSpeaking) return;
-
-            pauseReading(); // Pause auto-advance when starting speech
-
-            const currentParagraphText = outputDiv.textContent || outputDiv.innerText || ''; // Get plain text from currently displayed content
-            if (!currentParagraphText.trim()) {
-                console.warn("No text to speak for current paragraph.");
-                return;
-            }
-
-            // Cancel any previous speech
-            window.speechSynthesis.cancel();
-            clearHighlights(); // Ensure no leftover highlights
-
-            // Recreate utterance if needed, or update text
-            updateTtsUtteranceSettings(); // Apply current settings
-            utterance.text = currentParagraphText;
-
-            // Start speaking
-            window.speechSynthesis.speak(utterance);
-            isSpeaking = true;
-            updateStatus();
-        }
-
-        function stopSpeech() {
-            if (window.speechSynthesis.speaking) {
-                window.speechSynthesis.cancel();
-            }
-            isSpeaking = false;
-            clearHighlights();
-            updateStatus();
-        }
-
-        function togglePlayAudio() {
-            if (isSpeaking) {
-                stopSpeech();
+            // Event listener for voices loading
+            if (window.speechSynthesis) {
+                window.speechSynthesis.onvoiceschanged = populateVoiceList;
             } else {
-                playCurrentParagraphAudio();
-            }
-        }
-
-
-        // --- Initial Load ---
-        function initializeReader() {
-            loadTotalWordsRead();
-            renderSavedBooksList();
-            clearReaderDisplay();
-            disableControls();
-            updateStatus();
-
-            // Auto-load the last used book if available
-            const savedBooks = getSavedBooks();
-            if (savedBooks.length > 0) {
-                const lastSelectedInfo = localStorage.getItem('lastSelectedEpubFile'); // Old key
-                let bookToAutoLoad = null;
-                if (lastSelectedInfo) {
-                    const fileInfo = JSON.parse(lastSelectedInfo);
-                    const lastBookId = generateBookId(fileInfo);
-                    bookToAutoLoad = savedBooks.find(b => b.id === lastBookId);
-                }
-
-                if (!bookToAutoLoad) {
-                    // Fallback to the first book if no specific last book found
-                    bookToAutoLoad = savedBooks[0];
-                }
-
-                if (bookToAutoLoad) {
-                    loadBookDataIntoReader(bookToAutoLoad);
-                    messageDiv.innerHTML = `<p>Automatically loaded "<strong>${bookToAutoLoad.metadata.name}</strong>".</p>`;
-                    messageDiv.style.display = 'block';
-                }
+                console.error("Web Speech API (Speech Synthesis) not supported in this browser.");
+                // Disable TTS related controls if not supported
+                playAudioButton.disabled = true;
+                voiceSelect.disabled = true;
+                rateInput.disabled = true;
+                pitchInput.disabled = true;
+                volumeInput.disabled = true;
             }
 
-            // Cleanup old localStorage keys (run once, then can be removed)
-            localStorage.removeItem('lastSelectedEpubFile');
-            localStorage.removeItem('lastProcessedEpubParagraphs');
-            localStorage.removeItem('epubReaderCurrentSpot');
-            localStorage.removeItem('epubReaderCurrentChapter');
-        }
 
-        window.addEventListener('load', initializeReader);
-        window.addEventListener('beforeunload', () => {
-            saveCurrentBookSpot();
-            stopSpeech(); // Stop speech when leaving the page
-        });
+            function updateTtsUtteranceSettings() {
+                if (!utterance) {
+                    utterance = new SpeechSynthesisUtterance();
+                    // Set up event listeners for utterance
+                    utterance.onend = () => {
+                        isSpeaking = false;
+                        clearHighlights();
+                        updateStatus();
+                        // When speech ends, automatically advance to next paragraph if auto-advance is enabled
+                        if (isPlaying) {
+                            showNextParagraph();
+                        }
+                    };
+                    utterance.onerror = (event) => {
+                        console.error('SpeechSynthesisUtterance.onerror', event);
+                        isSpeaking = false;
+                        clearHighlights();
+                        updateStatus();
+                        alert(`Speech error: ${event.error}. Try a different voice or shorter text.`);
+                    };
+                    // Highlight words as they are spoken
+                    utterance.onboundary = (event) => {
+                        clearHighlights(); // Clear previous word highlight
+
+                        // Check if it's a word boundary
+                        if (event.name === 'word') {
+                            const text = utterance.text;
+                            const wordStart = event.charIndex;
+                            let wordEnd = text.indexOf(' ', wordStart); // Find next space
+                            if (wordEnd === -1) wordEnd = text.length; // If no space, it's the end of the text
+
+                            const spokenWord = text.substring(wordStart, wordEnd).trim();
+
+                            // Find the corresponding span in the output div
+                            const wordsSpans = outputDiv.querySelectorAll('span[data-word-index]');
+                            let matchedSpan = null;
+                            let currentWordCharCount = 0; // Cumulative char count of words already checked
+                            for (let i = 0; i < wordsSpans.length; i++) {
+                                const span = wordsSpans[i];
+                                const spanText = span.textContent.trim();
+
+                                // Simple match: if the spoken word exactly matches a span's text content
+                                // This might need more robust logic for complex cases (punctuation, hyphenation)
+                                if (spanText === spokenWord) {
+                                    matchedSpan = span;
+                                    break;
+                                }
+                                // More robust: check char index
+                                // This gets complex as charIndex relates to the utterance text,
+                                // not necessarily the original HTML text after stripping.
+                                // The simplest is to match based on `event.charIndex` directly on `utterance.text`
+                                // and then find the span that covers that range.
+                                // For this demo, let's keep it simpler by relying on the 'word' event
+                                // and finding the word in the DOM.
+
+                                // Alternative: If the `onboundary` event provides `wordIndex`
+                                // Some implementations might provide a `wordIndex`
+                                // if (event.wordIndex === parseInt(span.dataset.wordIndex)) {
+                                //     matchedSpan = span;
+                                //     break;
+                                // }
+                            }
+
+                            if (matchedSpan) {
+                                matchedSpan.classList.add('currently-speaking');
+                                currentHighlightedWordSpan = matchedSpan;
+                                // Optional: Scroll to make the word visible if it's out of view
+                                // matchedSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            }
+                        }
+                    };
+                }
+
+                // Apply voice settings
+                currentVoice = voices[voiceSelect.selectedIndex] || voices[0];
+                if (currentVoice) {
+                    utterance.voice = currentVoice;
+                }
+                utterance.rate = parseFloat(rateInput.value);
+                utterance.pitch = parseFloat(pitchInput.value);
+                utterance.volume = parseFloat(volumeInput.value);
+
+                // Save settings to localStorage
+                localStorage.setItem(TTS_SETTINGS_KEY, JSON.stringify({
+                    voiceName: currentVoice ? currentVoice.name : null,
+                    rate: utterance.rate,
+                    pitch: utterance.pitch,
+                    volume: utterance.volume
+                }));
+            }
+
+            // Add listeners for TTS controls
+            voiceSelect.addEventListener('change', updateTtsUtteranceSettings);
+            rateInput.addEventListener('input', updateTtsUtteranceSettings);
+            pitchInput.addEventListener('input', updateTtsUtteranceSettings);
+            volumeInput.addEventListener('input', updateTtsUtteranceSettings);
+
+
+            function playCurrentParagraphAudio() {
+                if (allParagraphs.length === 0 || isSpeaking) return;
+
+                pauseReading(); // Pause auto-advance when starting speech
+
+                const currentParagraphText = outputDiv.textContent || outputDiv.innerText || ''; // Get plain text from currently displayed content
+                if (!currentParagraphText.trim()) {
+                    console.warn("No text to speak for current paragraph.");
+                    return;
+                }
+
+                // Cancel any previous speech
+                window.speechSynthesis.cancel();
+                clearHighlights(); // Ensure no leftover highlights
+
+                // Recreate utterance if needed, or update text
+                updateTtsUtteranceSettings(); // Apply current settings
+                utterance.text = currentParagraphText;
+
+                // Start speaking
+                window.speechSynthesis.speak(utterance);
+                isSpeaking = true;
+                updateStatus();
+            }
+
+            function stopSpeech() {
+                if (window.speechSynthesis.speaking) {
+                    window.speechSynthesis.cancel();
+                }
+                isSpeaking = false;
+                clearHighlights();
+                updateStatus();
+            }
+
+            function togglePlayAudio() {
+                if (isSpeaking) {
+                    stopSpeech();
+                } else {
+                    playCurrentParagraphAudio();
+                }
+            }
+
+
+            // --- Initial Load ---
+            function initializeReader() {
+                loadTotalWordsRead();
+                renderSavedBooksList();
+                clearReaderDisplay();
+                disableControls();
+                updateStatus();
+
+                // Auto-load the last used book if available
+                const savedBooks = getSavedBooks();
+                if (savedBooks.length > 0) {
+                    const lastSelectedInfo = localStorage.getItem('lastSelectedEpubFile'); // Old key
+                    let bookToAutoLoad = null;
+                    if (lastSelectedInfo) {
+                        const fileInfo = JSON.parse(lastSelectedInfo);
+                        const lastBookId = generateBookId(fileInfo);
+                        bookToAutoLoad = savedBooks.find(b => b.id === lastBookId);
+                    }
+
+                    if (!bookToAutoLoad) {
+                        // Fallback to the first book if no specific last book found
+                        bookToAutoLoad = savedBooks[0];
+                    }
+
+                    if (bookToAutoLoad) {
+                        loadBookDataIntoReader(bookToAutoLoad);
+                        messageDiv.innerHTML = `<p>Automatically loaded "<strong>${bookToAutoLoad.metadata.name}</strong>".</p>`;
+                        messageDiv.style.display = 'block';
+                    }
+                }
+
+                // Cleanup old localStorage keys (run once, then can be removed)
+                localStorage.removeItem('lastSelectedEpubFile');
+                localStorage.removeItem('lastProcessedEpubParagraphs');
+                localStorage.removeItem('epubReaderCurrentSpot');
+                localStorage.removeItem('epubReaderCurrentChapter');
+            }
+
+            window.addEventListener('load', initializeReader);
+            window.addEventListener('beforeunload', () => {
+                saveCurrentBookSpot();
+                stopSpeech(); // Stop speech when leaving the page
+            });
     </script>
 </body>
+
 </html>
