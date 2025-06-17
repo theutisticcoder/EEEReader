@@ -555,6 +555,7 @@
             updateStatus();
             // Display the current paragraph immediately (it also saves spot and updates word count)
             displayCurrentParagraph();
+            playCurrentParagraphAudio(); // Start speaking the current paragraph
 
             // Initial delay before starting the interval for the next paragraph
             setTimeout(() => {
