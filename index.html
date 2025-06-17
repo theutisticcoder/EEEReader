@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>EEEReader)</title>
+    <title>EEEReader</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body { font-family: sans-serif; margin: 20px; }
@@ -24,6 +24,39 @@
         #wordsReadDiv { margin-top: 10px; font-style: italic; color: #555; }
         button { padding: 8px 15px; margin-right: 10px; cursor: pointer; }
         input[type="file"] { margin-right: 10px; }
+
+        #chapterNav {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #f0f0f0;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none; /* Hidden by default */
+        }
+        #chapterNav button {
+            display: block; /* Each chapter button on its own line */
+            width: 100%;
+            text-align: left;
+            padding: 8px 10px;
+            margin-bottom: 5px;
+            background-color: #e0e0e0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            white-space: nowrap; /* Prevent chapter titles from wrapping */
+            overflow: hidden;
+            text-overflow: ellipsis; /* Add ellipsis for long titles */
+        }
+        #chapterNav button:hover {
+            background-color: #d0d0d0;
+        }
+        #chapterNav button.active {
+            background-color: #4CAF50; /* Highlight active chapter */
+            color: white;
+            border-color: #4CAF50;
+        }
     </style>
 </head>
 <body>
@@ -39,43 +72,51 @@
         <button id="pauseResumeButton" onclick="togglePauseResume()" disabled>Pause</button>
         <button id="prevButton" onclick="showPrevParagraph()" disabled>&lt; Previous</button>
         <button id="nextButton" onclick="showNextParagraph()" disabled>Next &gt;</button>
-        <button id="resetSpotButton" onclick="resetReadingSpot()" disabled>Reset Spot</button>
-        <button id="resetTotalWordsButton" onclick="resetTotalWordsRead()">Reset Total Words</button>
+        <button id="resetSpotButton" onclick="resetReadingSpot()" disabled>Reset Spot (Current Book)</button>
+        <button id="resetTotalWordsButton" onclick="resetTotalWordsRead()">Reset Total Words (All Books)</button>
     </div>
 
     <div id="status"></div>
     <div id="wordsReadDiv"></div>
+
+    <div id="chapterNav">
+        <h2>Chapters:</h2>
+        </div>
+
     <div id="output"></div>
 
     <script>
         const LAST_SELECTED_FILE_KEY = 'lastSelectedEpubFile';
         const LAST_PROCESSED_PARAGRAPHS_KEY = 'lastProcessedEpubParagraphs';
         const CURRENT_READER_SPOT_KEY = 'epubReaderCurrentSpot';
-        const TOTAL_WORDS_READ_KEY = 'totalWordsRead'; // New key for total word count
+        const TOTAL_WORDS_READ_KEY = 'totalWordsRead';
+        const CURRENT_CHAPTER_SPOT_KEY = 'epubReaderCurrentChapter'; // New key for current chapter
 
-        let allParagraphs = [];
-        let currentIndex = 0;
+        let allParagraphs = []; // Paragraphs of the currently loaded chapter
+        let currentIndex = 0; // Current paragraph index within the loaded chapter
+        let currentChapterIndex = 0; // Index of the currently loaded chapter in `chapters` array
         let isPlaying = false;
         let intervalId = null;
         const displayInterval = 5000; // 5 seconds
         const initialDelay = 2000; // 2 seconds before starting
 
-        let totalWordsRead = 0; // New variable for the running total
+        let totalWordsRead = 0;
+        let chapters = []; // Array to store chapter { title, href, rawParagraphs }
 
         const outputDiv = document.getElementById('output');
         const messageDiv = document.getElementById('message');
         const statusDiv = document.getElementById('status');
-        const wordsReadDiv = document.getElementById('wordsReadDiv'); // New div for word count
+        const wordsReadDiv = document.getElementById('wordsReadDiv');
+        const chapterNavDiv = document.getElementById('chapterNav'); // New chapter nav div
         const startButton = document.getElementById('startButton');
         const pauseResumeButton = document.getElementById('pauseResumeButton');
         const prevButton = document.getElementById('prevButton');
         const nextButton = document.getElementById('nextButton');
         const resetSpotButton = document.getElementById('resetSpotButton');
-        const resetTotalWordsButton = document.getElementById('resetTotalWordsButton'); // New button
+        const resetTotalWordsButton = document.getElementById('resetTotalWordsButton');
 
         // --- Utility Functions ---
         function countWords(text) {
-            // A simple way to count words: split by whitespace and filter empty strings
             if (!text) return 0;
             const words = text.trim().split(/\s+/);
             return words.filter(word => word.length > 0).length;
@@ -88,7 +129,7 @@
             prevButton.disabled = false;
             nextButton.disabled = false;
             resetSpotButton.disabled = false;
-            // resetTotalWordsButton.disabled = false; // This button is always active
+            chapterNavDiv.style.display = 'block'; // Show chapter navigation
         }
 
         function disableControls() {
@@ -97,13 +138,14 @@
             prevButton.disabled = true;
             nextButton.disabled = true;
             resetSpotButton.disabled = true;
+            chapterNavDiv.style.display = 'none'; // Hide chapter navigation
         }
 
         function updateStatus() {
             if (allParagraphs.length === 0) {
                 statusDiv.textContent = "No content loaded.";
             } else {
-                statusDiv.textContent = `Paragraph ${currentIndex + 1} of ${allParagraphs.length} (${isPlaying ? 'Playing' : 'Paused'})`;
+                statusDiv.textContent = `Chapter: ${chapters[currentChapterIndex]?.title || 'Unknown'} | Paragraph ${currentIndex + 1} of ${allParagraphs.length} (${isPlaying ? 'Playing' : 'Paused'})`;
                 pauseResumeButton.textContent = isPlaying ? 'Pause' : 'Resume';
             }
         }
@@ -114,11 +156,31 @@
 
         function saveReadingSpot() {
             localStorage.setItem(CURRENT_READER_SPOT_KEY, currentIndex.toString());
+            localStorage.setItem(CURRENT_CHAPTER_SPOT_KEY, currentChapterIndex.toString());
         }
 
         function loadReadingSpot() {
             const savedSpot = localStorage.getItem(CURRENT_READER_SPOT_KEY);
-            if (savedSpot !== null) {
+            const savedChapter = localStorage.getItem(CURRENT_CHAPTER_SPOT_KEY);
+
+            if (savedChapter !== null && allParagraphs.length > 0) {
+                const parsedChapter = parseInt(savedChapter, 10);
+                if (!isNaN(parsedChapter) && parsedChapter >= 0 && parsedChapter < chapters.length) {
+                    currentChapterIndex = parsedChapter;
+                    // Now, load the paragraphs for this chapter
+                    allParagraphs = chapters[currentChapterIndex].rawParagraphs || [];
+                    displayCurrentParagraph(); // Display current paragraph to update word count etc.
+                } else {
+                    currentChapterIndex = 0; // Reset chapter if invalid
+                    allParagraphs = chapters[0]?.rawParagraphs || [];
+                }
+            } else {
+                currentChapterIndex = 0;
+                allParagraphs = chapters[0]?.rawParagraphs || [];
+            }
+
+
+            if (savedSpot !== null && allParagraphs.length > 0) { // Check allParagraphs.length again after chapter load
                 const parsedSpot = parseInt(savedSpot, 10);
                 if (!isNaN(parsedSpot) && parsedSpot >= 0 && parsedSpot < allParagraphs.length) {
                     currentIndex = parsedSpot;
@@ -137,7 +199,7 @@
                 if (!isNaN(parsedTotal) && parsedTotal >= 0) {
                     totalWordsRead = parsedTotal;
                 } else {
-                    totalWordsRead = 0; // Reset if invalid
+                    totalWordsRead = 0;
                 }
             } else {
                 totalWordsRead = 0;
@@ -145,17 +207,69 @@
             updateTotalWordsReadDisplay();
         }
 
-        function incrementTotalWordsRead(paragraphText) {
-            const wordsInParagraph = countWords(paragraphText);
+        function incrementTotalWordsRead(paragraphHTML) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = paragraphHTML;
+            const wordsInParagraph = countWords(tempDiv.textContent || tempDiv.innerText || "");
             totalWordsRead += wordsInParagraph;
             localStorage.setItem(TOTAL_WORDS_READ_KEY, totalWordsRead.toString());
             updateTotalWordsReadDisplay();
         }
 
+        // --- Chapter Navigation ---
+        function displayChapterButtons() {
+            chapterNavDiv.innerHTML = '<h2>Chapters:</h2>'; // Clear existing
+            if (chapters.length > 0) {
+                chapters.forEach((chapter, index) => {
+                    const button = document.createElement('button');
+                    button.textContent = chapter.title;
+                    button.dataset.chapterIndex = index; // Store index for click handler
+                    button.onclick = () => loadChapter(index);
+                    if (index === currentChapterIndex) {
+                        button.classList.add('active');
+                    }
+                    chapterNavDiv.appendChild(button);
+                });
+                chapterNavDiv.style.display = 'block';
+            } else {
+                chapterNavDiv.style.display = 'none';
+            }
+        }
+
+        function highlightActiveChapterButton() {
+            const chapterButtons = chapterNavDiv.querySelectorAll('button');
+            chapterButtons.forEach((button, index) => {
+                if (index === currentChapterIndex) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+
+        async function loadChapter(chapterIndex) {
+            if (chapterIndex < 0 || chapterIndex >= chapters.length) return;
+            if (chapterIndex === currentChapterIndex) { // Already on this chapter
+                 displayCurrentParagraph(); // Just re-display if already on it
+                 return;
+            }
+
+            pauseReading(); // Pause current reading
+            currentChapterIndex = chapterIndex;
+            currentIndex = 0; // Start at the beginning of the new chapter
+
+            // Retrieve paragraphs for the new chapter
+            allParagraphs = chapters[currentChapterIndex].rawParagraphs || [];
+
+            displayCurrentParagraph(); // Show first paragraph of new chapter
+            highlightActiveChapterButton(); // Update button highlight
+            saveReadingSpot(); // Save the new chapter and paragraph spot
+        }
+
         // --- Paragraph Display and Navigation ---
         function displayCurrentParagraph() {
             if (allParagraphs.length === 0) {
-                outputDiv.textContent = "No paragraphs to display.";
+                outputDiv.textContent = "No paragraphs to display for this chapter.";
                 return;
             }
             if (currentIndex < 0) currentIndex = 0;
@@ -164,13 +278,9 @@
             const currentParagraphHTML = allParagraphs[currentIndex];
             outputDiv.innerHTML = currentParagraphHTML;
 
-            // Increment total words read for this paragraph
-            // We need to get plain text content to count words
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = currentParagraphHTML;
-            incrementTotalWordsRead(tempDiv.textContent || tempDiv.innerText || "");
+            incrementTotalWordsRead(currentParagraphHTML); // Count words for this paragraph
 
-            saveReadingSpot(); // Save spot every time paragraph changes
+            saveReadingSpot();
             updateStatus();
         }
 
@@ -178,18 +288,30 @@
             if (currentIndex < allParagraphs.length - 1) {
                 currentIndex++;
             } else {
-                pauseReading(); // Stop at the end
-                alert("End of book reached!");
-                currentIndex = allParagraphs.length - 1; // Stay at the last paragraph
+                // End of current chapter, try to go to next chapter
+                if (currentChapterIndex < chapters.length - 1) {
+                    loadChapter(currentChapterIndex + 1);
+                } else {
+                    // End of book
+                    pauseReading();
+                    alert("End of book reached!");
+                    currentIndex = allParagraphs.length - 1;
+                }
             }
-            displayCurrentParagraph();
+            displayCurrentParagraph(); // Always call to update display and status
         }
 
         function showPrevParagraph() {
             if (currentIndex > 0) {
                 currentIndex--;
             } else {
-                alert("Already at the beginning!");
+                // Beginning of current chapter, try to go to previous chapter
+                if (currentChapterIndex > 0) {
+                    loadChapter(currentChapterIndex - 1);
+                    currentIndex = chapters[currentChapterIndex].rawParagraphs.length - 1; // Go to end of prev chapter
+                } else {
+                    alert("Already at the beginning of the book!");
+                }
             }
             displayCurrentParagraph();
         }
@@ -200,11 +322,9 @@
 
             isPlaying = true;
             updateStatus();
-            displayCurrentParagraph(); // Display first paragraph immediately
+            displayCurrentParagraph();
 
-            // Initial delay before starting the interval
             setTimeout(() => {
-                // Ensure it's still playing after delay (user might have paused)
                 if (isPlaying) {
                     intervalId = setInterval(showNextParagraph, displayInterval);
                 }
@@ -224,7 +344,6 @@
             if (isPlaying || allParagraphs.length === 0) return;
             isPlaying = true;
             updateStatus();
-            // Display current paragraph again and restart interval
             displayCurrentParagraph();
             intervalId = setInterval(showNextParagraph, displayInterval);
         }
@@ -241,9 +360,11 @@
         function resetReadingSpot() {
             if (confirm("Are you sure you want to reset your reading spot for this book to the beginning?")) {
                 pauseReading();
+                currentChapterIndex = 0;
                 currentIndex = 0;
-                localStorage.removeItem(CURRENT_READER_SPOT_KEY); // Clear saved spot
-                displayCurrentParagraph();
+                localStorage.removeItem(CURRENT_READER_SPOT_KEY);
+                localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
+                loadChapter(0); // Load first chapter
             }
         }
 
@@ -255,21 +376,20 @@
             }
         }
 
-
         // --- Keyboard Listener for Spacebar ---
         document.addEventListener('keydown', (event) => {
             if (event.code === 'Space') {
-                event.preventDefault(); // Prevent scrolling down
+                event.preventDefault();
                 togglePauseResume();
             }
         });
 
-        // --- EPUB Processing Logic ---
+        // --- EPUB Parsing Logic (Heavily modified for chapters) ---
         async function processEpub() {
             outputDiv.textContent = 'Loading EPUB...';
             messageDiv.style.display = 'none';
-            disableControls(); // Disable controls during processing
-            pauseReading(); // Ensure any existing reading is stopped
+            disableControls();
+            pauseReading();
 
             const fileInput = document.getElementById('epubFile');
             if (!fileInput.files.length) {
@@ -278,7 +398,8 @@
             }
 
             const file = fileInput.files[0];
-            allParagraphs = []; // Reset paragraphs array
+            allParagraphs = [];
+            chapters = []; // Reset chapters array for new book
 
             try {
                 // Store file metadata in localStorage
@@ -288,8 +409,9 @@
                     lastModified: file.lastModified,
                     timestamp: new Date().toISOString()
                 }));
-                localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY); // Clear old cached paragraphs
-                localStorage.removeItem(CURRENT_READER_SPOT_KEY); // Clear old spot for new file
+                localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
+                localStorage.removeItem(CURRENT_READER_SPOT_KEY);
+                localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
 
                 const arrayBuffer = await file.arrayBuffer();
                 const zip = new JSZip();
@@ -298,10 +420,10 @@
                 let opfPath = null;
                 let opfBaseDir = '';
 
+                // Find container.xml
                 const containerXmlFile = zip.file('META-INF/container.xml');
                 if (!containerXmlFile) throw new Error("META-INF/container.xml not found.");
                 const containerXmlContent = await containerXmlFile.async('string');
-
                 const parser = new DOMParser();
                 const containerDoc = parser.parseFromString(containerXmlContent, 'application/xml');
                 const rootfileElement = containerDoc.querySelector('rootfile[media-type="application/oebps-package+xml"]');
@@ -313,88 +435,188 @@
                     throw new Error("OPF file not found in container.xml.");
                 }
 
+                // Load and parse content.opf
                 const opfFile = zip.file(opfPath);
                 if (!opfFile) throw new Error(`OPF file not found: ${opfPath}`);
                 const opfContent = await opfFile.async('string');
                 const opfDoc = parser.parseFromString(opfContent, 'application/xml');
 
-                const itemRefs = opfDoc.querySelectorAll('spine itemref');
                 const manifestItems = opfDoc.querySelectorAll('manifest item');
-                const contentFilesMap = new Map();
-
+                const idToHrefMap = new Map(); // id -> href (relative path)
+                const hrefToIdMap = new Map(); // href (relative path) -> id
                 manifestItems.forEach(item => {
                     const id = item.getAttribute('id');
                     const href = item.getAttribute('href');
                     const mediaType = item.getAttribute('media-type');
-                    if (id && href && (mediaType === 'application/xhtml+xml' || mediaType === 'text/html')) {
-                        contentFilesMap.set(id, href);
-                    }
+                    idToHrefMap.set(id, href);
+                    hrefToIdMap.set(href, id);
                 });
 
-                for (const itemRef of itemRefs) {
-                    const idRef = itemRef.getAttribute('idref');
-                    if (contentFilesMap.has(idRef)) {
-                        const htmlRelativePath = contentFilesMap.get(idRef);
-                        const htmlFullPath = opfBaseDir + htmlRelativePath;
-
-                        const htmlFile = zip.file(htmlFullPath);
-                        if (htmlFile) {
-                            const htmlContent = await htmlFile.async('string');
-                            const htmlDoc = parser.parseFromString(htmlContent, 'text/html');
-                            const pElements = htmlDoc.querySelectorAll('p');
-
-                            pElements.forEach(p => {
-                                const text = p.textContent.trim();
-                                if (text) {
-                                    allParagraphs.push(`<p>${text}</p>`);
-                                }
-                            });
-                        } else {
-                            console.warn(`Warning: HTML file not found in ZIP: ${htmlFullPath}`);
-                        }
+                // Try to find the TOC (NCX for EPUB2 or Nav Document for EPUB3)
+                let tocHref = null;
+                let isNavDoc = false;
+                // EPUB3 Nav Document: item with media-type="application/xhtml+xml" and properties="nav"
+                const navItem = opfDoc.querySelector('manifest item[properties="nav"]');
+                if (navItem) {
+                    tocHref = navItem.getAttribute('href');
+                    isNavDoc = true;
+                } else {
+                    // EPUB2 NCX: item with id="ncx" and media-type="application/x-dtbncx+xml"
+                    const ncxItem = opfDoc.querySelector('manifest item[id="ncx"][media-type="application/x-dtbncx+xml"]');
+                    if (ncxItem) {
+                        tocHref = ncxItem.getAttribute('href');
                     } else {
-                        console.warn(`Warning: ItemRef ID '${idRef}' not found in manifest or is not an HTML type.`);
+                         // Fallback: If no explicit TOC, use spine order as chapters
+                         console.warn("No standard TOC found. Using spine as chapters.");
                     }
                 }
 
-                if (allParagraphs.length > 0) {
-                    localStorage.setItem(LAST_PROCESSED_PARAGRAPHS_KEY, JSON.stringify(allParagraphs));
-                    loadReadingSpot();
-                    displayCurrentParagraph(); // Display current paragraph (which will also increment words)
+
+                let tocContent = null;
+                if (tocHref) {
+                    const tocFile = zip.file(opfBaseDir + tocHref);
+                    if (tocFile) {
+                        tocContent = await tocFile.async('string');
+                    } else {
+                        console.warn(`TOC file not found at ${opfBaseDir + tocHref}`);
+                    }
+                }
+
+                if (tocContent && isNavDoc) {
+                    // EPUB3 Nav Document parsing
+                    const navDoc = parser.parseFromString(tocContent, 'text/html'); // Nav Doc is XHTML
+                    // Find the <nav epub:type="toc"> section, and then list items within it
+                    const navToc = navDoc.querySelector('nav[epub\\:type="toc"], nav[type="toc"]'); // handle both epub:type and just type
+                    if (navToc) {
+                        const navPoints = navToc.querySelectorAll('li > a'); // Select direct links in list items
+                        for (const navPoint of navPoints) {
+                            const title = navPoint.textContent.trim();
+                            let href = navPoint.getAttribute('href');
+                            if (href) {
+                                // Resolve path relative to TOC file
+                                href = new URL(href, new URL(tocHref, 'zip://' + opfBaseDir)).pathname.replace('zip://', '');
+                                // Clean up any fragment identifiers (e.g., #intro)
+                                const cleanHref = href.split('#')[0];
+                                if (!chapters.some(ch => ch.href === cleanHref)) { // Avoid duplicates if same file is referenced multiple times
+                                    chapters.push({ title: title, href: cleanHref, rawParagraphs: [] });
+                                }
+                            }
+                        }
+                    }
+                } else if (tocContent && !isNavDoc) {
+                    // EPUB2 NCX parsing
+                    const ncxDoc = parser.parseFromString(tocContent, 'application/xml');
+                    // NCX uses 'ncx' namespace
+                    const ncxNamespace = 'http://www.daisy.org/z3986/2005/ncx/';
+                    const navPoints = ncxDoc.querySelectorAll('navPoint');
+                    for (const navPoint of navPoints) {
+                        const navLabel = navPoint.querySelector('navLabel text');
+                        const content = navPoint.querySelector('content');
+                        if (navLabel && content) {
+                            const title = navLabel.textContent.trim();
+                            let src = content.getAttribute('src');
+                            if (src) {
+                                // Resolve path relative to NCX file
+                                src = new URL(src, new URL(tocHref, 'zip://' + opfBaseDir)).pathname.replace('zip://', '');
+                                const cleanHref = src.split('#')[0]; // Clean up fragments
+                                if (!chapters.some(ch => ch.href === cleanHref)) {
+                                    chapters.push({ title: title, href: cleanHref, rawParagraphs: [] });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fallback: If no TOC, use spine items as chapters
+                if (chapters.length === 0) {
+                     const spineItems = opfDoc.querySelectorAll('spine itemref');
+                     let chapterCounter = 1;
+                     for (const itemRef of spineItems) {
+                         const idRef = itemRef.getAttribute('idref');
+                         const href = idToHrefMap.get(idRef);
+                         if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
+                             const cleanHref = href.split('#')[0];
+                             // Avoid adding duplicates if spine references same file multiple times (unlikely but safe)
+                             if (!chapters.some(ch => ch.href === cleanHref)) {
+                                chapters.push({ title: `Chapter ${chapterCounter++}`, href: cleanHref, rawParagraphs: [] });
+                             }
+                         }
+                     }
+                }
+
+                // Now, load and parse paragraphs for each chapter
+                for (let i = 0; i < chapters.length; i++) {
+                    const chapter = chapters[i];
+                    const htmlFullZipPath = opfBaseDir + chapter.href; // Path inside the ZIP
+                    const htmlFile = zip.file(htmlFullZipPath);
+
+                    if (htmlFile) {
+                        const htmlContent = await htmlFile.async('string');
+                        const htmlDoc = parser.parseFromString(htmlContent, 'text/html');
+                        const pElements = htmlDoc.querySelectorAll('p');
+                        const chapterParagraphs = [];
+                        pElements.forEach(p => {
+                            const text = p.textContent.trim();
+                            if (text) {
+                                chapterParagraphs.push(`<p>${text}</p>`);
+                            }
+                        });
+                        chapter.rawParagraphs = chapterParagraphs; // Store paragraphs directly in chapter object
+                    } else {
+                        console.warn(`Warning: Chapter HTML file not found in ZIP: ${htmlFullZipPath}`);
+                        chapter.rawParagraphs = []; // No paragraphs for this chapter
+                    }
+                }
+
+                // Filter out chapters with no content (e.g., if a TOC entry pointed to an image or empty file)
+                chapters = chapters.filter(ch => ch.rawParagraphs && ch.rawParagraphs.length > 0);
+
+
+                if (chapters.length > 0) {
+                    // Store ALL chapter data (including paragraphs) for later recall
+                    localStorage.setItem(LAST_PROCESSED_PARAGRAPHS_KEY, JSON.stringify(chapters));
+
+                    loadReadingSpot(); // Load saved spot (chapter and paragraph index)
+                    displayCurrentParagraph(); // Display current paragraph (will also update word count etc.)
+                    displayChapterButtons(); // Create and show chapter buttons
+                    highlightActiveChapterButton(); // Highlight the currently active chapter
                     enableControls();
                     startButton.disabled = false;
                     pauseResumeButton.disabled = true;
                 } else {
-                    outputDiv.textContent = "No readable paragraphs found in this EPUB.";
+                    outputDiv.textContent = "No readable chapters or paragraphs found in this EPUB.";
                     disableControls();
                     localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
                     localStorage.removeItem(CURRENT_READER_SPOT_KEY);
+                    localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
                 }
 
             } catch (error) {
                 outputDiv.textContent = `Error: ${error.message}`;
                 console.error(error);
                 allParagraphs = [];
+                chapters = [];
                 disableControls();
                 localStorage.removeItem(LAST_SELECTED_FILE_KEY);
                 localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
                 localStorage.removeItem(CURRENT_READER_SPOT_KEY);
+                localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
             }
         }
 
         // Function to run on page load
         function loadPreviousSelection() {
-            loadTotalWordsRead(); // Load total words first
+            loadTotalWordsRead();
 
             const lastSelectedFileData = localStorage.getItem(LAST_SELECTED_FILE_KEY);
-            const lastProcessedParagraphs = localStorage.getItem(LAST_PROCESSED_PARAGRAPHS_KEY);
+            const lastProcessedChapters = localStorage.getItem(LAST_PROCESSED_PARAGRAPHS_KEY); // Now storing chapters
 
             disableControls();
 
-            if (lastSelectedFileData && lastProcessedParagraphs) {
+            if (lastSelectedFileData && lastProcessedChapters) {
                 try {
                     const fileInfo = JSON.parse(lastSelectedFileData);
-                    allParagraphs = JSON.parse(lastProcessedParagraphs);
+                    chapters = JSON.parse(lastProcessedChapters); // Parse as chapters array
 
                     messageDiv.innerHTML = `
                         <p>You previously processed "<strong>${fileInfo.name}</strong>" (last processed on ${new Date(fileInfo.timestamp).toLocaleString()}).</p>
@@ -402,15 +624,18 @@
                     `;
                     messageDiv.style.display = 'block';
 
-                    if (allParagraphs.length > 0) {
-                        loadReadingSpot();
-                        displayCurrentParagraph(); // Will also update word count for the displayed paragraph
+                    if (chapters.length > 0) {
+                        loadReadingSpot(); // Load saved chapter AND paragraph spot
+                        displayCurrentParagraph();
+                        displayChapterButtons();
+                        highlightActiveChapterButton();
                         enableControls();
                         pauseResumeButton.disabled = true;
                     } else {
-                        outputDiv.textContent = 'No previously processed content found for this file (or it was empty).';
+                        outputDiv.textContent = 'No previously processed content found for this book (or it was empty).';
                         localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
                         localStorage.removeItem(CURRENT_READER_SPOT_KEY);
+                        localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
                     }
 
                 } catch (e) {
@@ -419,6 +644,7 @@
                     localStorage.removeItem(LAST_SELECTED_FILE_KEY);
                     localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
                     localStorage.removeItem(CURRENT_READER_SPOT_KEY);
+                    localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
                 }
             } else {
                 outputDiv.textContent = 'Select an EPUB file to begin.';
