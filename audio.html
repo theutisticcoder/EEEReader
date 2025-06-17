@@ -510,7 +510,8 @@
 
             // If auto-advance was active, restart the interval (unless speech takes over)
                 startReading(); // This will clear and restart the interval
-            
+    document.getElementById('playAudioButton').disabled = false; // Enable play audio button
+            playCurrentParagraphAudio(); // Start speaking the current paragraph            
         }
 
         /** Moves to and displays the previous paragraph or chapter. */
