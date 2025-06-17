@@ -508,11 +508,9 @@
             }
             displayCurrentParagraph(); // Update display
 
-            isPlaying = true;
             // If auto-advance was active, restart the interval (unless speech takes over)
-            if (isPlaying) {
                 startReading(); // This will clear and restart the interval
-            }
+            
         }
 
         /** Moves to and displays the previous paragraph or chapter. */
@@ -541,7 +539,7 @@
 
         /** Initiates or restarts the auto-advance reading mode. */
         function startReading() {
-            if (isPlaying || allParagraphs.length === 0) return;
+            if (!isPlaying || allParagraphs.length === 0) return;
 
             // If speech is active, stop it and rely on the auto-advance timer
             if (isSpeaking) {
