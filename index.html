@@ -1,118 +1,435 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-    <title>EPUB SpeeedReader</title>
+    <title>EEEReader)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-        }
-
+        body { font-family: sans-serif; margin: 20px; }
+        #message { margin-top: 10px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; display: none; }
         #output {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            min-height: 100px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            background-color: #fff;
             margin-top: 20px;
-            font-size: 1.2em;
+            font-size: 1.1em;
+            line-height: 1.6;
         }
-
-        button {
-            margin-top: 10px;
-            padding: 10px 15px;
-            font-size: 1em;
-        }
+        #controls { margin-top: 15px; }
+        #status { margin-top: 10px; font-weight: bold; }
+        #wordsReadDiv { margin-top: 10px; font-style: italic; color: #555; }
+        button { padding: 8px 15px; margin-right: 10px; cursor: pointer; }
+        input[type="file"] { margin-right: 10px; }
     </style>
-
+</head>
 <body>
+    <h1>EPUB Paragraph Reader</h1>
+
+    <div id="message"></div>
+
     <input type="file" id="epubFile" accept=".epub">
-    <button onclick="processEpub()">Extract Paragraphs</button>
+    <button onclick="processEpub()">Load & Process EPUB</button>
+
+    <div id="controls">
+        <button id="startButton" onclick="startReading()" disabled>Start Reading</button>
+        <button id="pauseResumeButton" onclick="togglePauseResume()" disabled>Pause</button>
+        <button id="prevButton" onclick="showPrevParagraph()" disabled>&lt; Previous</button>
+        <button id="nextButton" onclick="showNextParagraph()" disabled>Next &gt;</button>
+        <button id="resetSpotButton" onclick="resetReadingSpot()" disabled>Reset Spot</button>
+        <button id="resetTotalWordsButton" onclick="resetTotalWordsRead()">Reset Total Words</button>
+    </div>
+
+    <div id="status"></div>
+    <div id="wordsReadDiv"></div>
     <div id="output"></div>
 
     <script>
-        var num = 0;
-        num = localStorage.getItem('num') ? parseInt(localStorage.getItem('num')) : 0;
-        function read(book) {
-            document.getElementById('output').innerHTML = book[num];
-            num++;
-            localStorage.setItem('num', num); // Save the current paragraph index
-            if (num >= book.length) {
-                num = 0; // Reset to the first paragraph after reaching the end
+        const LAST_SELECTED_FILE_KEY = 'lastSelectedEpubFile';
+        const LAST_PROCESSED_PARAGRAPHS_KEY = 'lastProcessedEpubParagraphs';
+        const CURRENT_READER_SPOT_KEY = 'epubReaderCurrentSpot';
+        const TOTAL_WORDS_READ_KEY = 'totalWordsRead'; // New key for total word count
 
-            }
-            else {
-                setTimeout(function () { read(book); }, 5000); // Change paragraph every 5 seconds
-                wpm();
-            }
+        let allParagraphs = [];
+        let currentIndex = 0;
+        let isPlaying = false;
+        let intervalId = null;
+        const displayInterval = 5000; // 5 seconds
+        const initialDelay = 2000; // 2 seconds before starting
+
+        let totalWordsRead = 0; // New variable for the running total
+
+        const outputDiv = document.getElementById('output');
+        const messageDiv = document.getElementById('message');
+        const statusDiv = document.getElementById('status');
+        const wordsReadDiv = document.getElementById('wordsReadDiv'); // New div for word count
+        const startButton = document.getElementById('startButton');
+        const pauseResumeButton = document.getElementById('pauseResumeButton');
+        const prevButton = document.getElementById('prevButton');
+        const nextButton = document.getElementById('nextButton');
+        const resetSpotButton = document.getElementById('resetSpotButton');
+        const resetTotalWordsButton = document.getElementById('resetTotalWordsButton'); // New button
+
+        // --- Utility Functions ---
+        function countWords(text) {
+            // A simple way to count words: split by whitespace and filter empty strings
+            if (!text) return 0;
+            const words = text.trim().split(/\s+/);
+            return words.filter(word => word.length > 0).length;
         }
-        var totalread = localStorage.getItem('totalread') ? parseInt(localStorage.getItem('totalread')) : 0;
-        function wpm() {
-            const words = document.getElementById('output').textContent.split(' ').length;
-            var wpm = Math.round((words / 5) * 60); // Assuming 5 seconds per paragraph
-            totalread += words;
-            localStorage.setItem('totalread', totalread); // Save total words read
+
+        // --- UI Control Functions ---
+        function enableControls() {
+            startButton.disabled = false;
+            pauseResumeButton.disabled = false;
+            prevButton.disabled = false;
+            nextButton.disabled = false;
+            resetSpotButton.disabled = false;
+            // resetTotalWordsButton.disabled = false; // This button is always active
         }
-        function loadParagraphs() {
-            const paragraphs = JSON.parse(localStorage.getItem('paragraphs') || '[]');
-            if (paragraphs.length > 0) {
-                setTimeout(() => read(paragraphs), 3000); // Start reading after 3 seconds
+
+        function disableControls() {
+            startButton.disabled = true;
+            pauseResumeButton.disabled = true;
+            prevButton.disabled = true;
+            nextButton.disabled = true;
+            resetSpotButton.disabled = true;
+        }
+
+        function updateStatus() {
+            if (allParagraphs.length === 0) {
+                statusDiv.textContent = "No content loaded.";
             } else {
-                document.getElementById('output').innerHTML = 'No paragraphs found. Please process an EPUB file first.';
+                statusDiv.textContent = `Paragraph ${currentIndex + 1} of ${allParagraphs.length} (${isPlaying ? 'Playing' : 'Paused'})`;
+                pauseResumeButton.textContent = isPlaying ? 'Pause' : 'Resume';
             }
         }
-        var paragraphs = [];
-        async function processEpub() {
-            const fileInput = document.getElementById('epubFile');
-            const outputDiv = document.getElementById('output');
-            outputDiv.innerHTML = 'Loading EPUB...';
 
+        function updateTotalWordsReadDisplay() {
+            wordsReadDiv.textContent = `Total words read across all books: ${totalWordsRead.toLocaleString()}`;
+        }
+
+        function saveReadingSpot() {
+            localStorage.setItem(CURRENT_READER_SPOT_KEY, currentIndex.toString());
+        }
+
+        function loadReadingSpot() {
+            const savedSpot = localStorage.getItem(CURRENT_READER_SPOT_KEY);
+            if (savedSpot !== null) {
+                const parsedSpot = parseInt(savedSpot, 10);
+                if (!isNaN(parsedSpot) && parsedSpot >= 0 && parsedSpot < allParagraphs.length) {
+                    currentIndex = parsedSpot;
+                } else {
+                    currentIndex = 0; // Reset if invalid spot
+                }
+            } else {
+                currentIndex = 0;
+            }
+        }
+
+        function loadTotalWordsRead() {
+            const savedTotalWords = localStorage.getItem(TOTAL_WORDS_READ_KEY);
+            if (savedTotalWords !== null) {
+                const parsedTotal = parseInt(savedTotalWords, 10);
+                if (!isNaN(parsedTotal) && parsedTotal >= 0) {
+                    totalWordsRead = parsedTotal;
+                } else {
+                    totalWordsRead = 0; // Reset if invalid
+                }
+            } else {
+                totalWordsRead = 0;
+            }
+            updateTotalWordsReadDisplay();
+        }
+
+        function incrementTotalWordsRead(paragraphText) {
+            const wordsInParagraph = countWords(paragraphText);
+            totalWordsRead += wordsInParagraph;
+            localStorage.setItem(TOTAL_WORDS_READ_KEY, totalWordsRead.toString());
+            updateTotalWordsReadDisplay();
+        }
+
+        // --- Paragraph Display and Navigation ---
+        function displayCurrentParagraph() {
+            if (allParagraphs.length === 0) {
+                outputDiv.textContent = "No paragraphs to display.";
+                return;
+            }
+            if (currentIndex < 0) currentIndex = 0;
+            if (currentIndex >= allParagraphs.length) currentIndex = allParagraphs.length - 1;
+
+            const currentParagraphHTML = allParagraphs[currentIndex];
+            outputDiv.innerHTML = currentParagraphHTML;
+
+            // Increment total words read for this paragraph
+            // We need to get plain text content to count words
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = currentParagraphHTML;
+            incrementTotalWordsRead(tempDiv.textContent || tempDiv.innerText || "");
+
+            saveReadingSpot(); // Save spot every time paragraph changes
+            updateStatus();
+        }
+
+        function showNextParagraph() {
+            if (currentIndex < allParagraphs.length - 1) {
+                currentIndex++;
+            } else {
+                pauseReading(); // Stop at the end
+                alert("End of book reached!");
+                currentIndex = allParagraphs.length - 1; // Stay at the last paragraph
+            }
+            displayCurrentParagraph();
+        }
+
+        function showPrevParagraph() {
+            if (currentIndex > 0) {
+                currentIndex--;
+            } else {
+                alert("Already at the beginning!");
+            }
+            displayCurrentParagraph();
+        }
+
+        // --- Reading Controls ---
+        function startReading() {
+            if (isPlaying || allParagraphs.length === 0) return;
+
+            isPlaying = true;
+            updateStatus();
+            displayCurrentParagraph(); // Display first paragraph immediately
+
+            // Initial delay before starting the interval
+            setTimeout(() => {
+                // Ensure it's still playing after delay (user might have paused)
+                if (isPlaying) {
+                    intervalId = setInterval(showNextParagraph, displayInterval);
+                }
+            }, initialDelay);
+        }
+
+        function pauseReading() {
+            if (!isPlaying) return;
+            isPlaying = false;
+            clearInterval(intervalId);
+            intervalId = null;
+            saveReadingSpot();
+            updateStatus();
+        }
+
+        function resumeReading() {
+            if (isPlaying || allParagraphs.length === 0) return;
+            isPlaying = true;
+            updateStatus();
+            // Display current paragraph again and restart interval
+            displayCurrentParagraph();
+            intervalId = setInterval(showNextParagraph, displayInterval);
+        }
+
+        function togglePauseResume() {
+            if (allParagraphs.length === 0) return;
+            if (isPlaying) {
+                pauseReading();
+            } else {
+                resumeReading();
+            }
+        }
+
+        function resetReadingSpot() {
+            if (confirm("Are you sure you want to reset your reading spot for this book to the beginning?")) {
+                pauseReading();
+                currentIndex = 0;
+                localStorage.removeItem(CURRENT_READER_SPOT_KEY); // Clear saved spot
+                displayCurrentParagraph();
+            }
+        }
+
+        function resetTotalWordsRead() {
+            if (confirm("Are you sure you want to reset the TOTAL words read across all books? This cannot be undone.")) {
+                totalWordsRead = 0;
+                localStorage.setItem(TOTAL_WORDS_READ_KEY, '0');
+                updateTotalWordsReadDisplay();
+            }
+        }
+
+
+        // --- Keyboard Listener for Spacebar ---
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Space') {
+                event.preventDefault(); // Prevent scrolling down
+                togglePauseResume();
+            }
+        });
+
+        // --- EPUB Processing Logic ---
+        async function processEpub() {
+            outputDiv.textContent = 'Loading EPUB...';
+            messageDiv.style.display = 'none';
+            disableControls(); // Disable controls during processing
+            pauseReading(); // Ensure any existing reading is stopped
+
+            const fileInput = document.getElementById('epubFile');
             if (!fileInput.files.length) {
-                outputDiv.innerHTML = 'Please select an EPUB file.';
+                outputDiv.textContent = 'Please select an EPUB file.';
                 return;
             }
 
             const file = fileInput.files[0];
-            const reader = new FileReader();
+            allParagraphs = []; // Reset paragraphs array
 
-            reader.onload = async (e) => {
-      zip = await JSZip.loadAsync(e.target.result);
+            try {
+                // Store file metadata in localStorage
+                localStorage.setItem(LAST_SELECTED_FILE_KEY, JSON.stringify({
+                    name: file.name,
+                    size: file.size,
+                    lastModified: file.lastModified,
+                    timestamp: new Date().toISOString()
+                }));
+                localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY); // Clear old cached paragraphs
+                localStorage.removeItem(CURRENT_READER_SPOT_KEY); // Clear old spot for new file
 
-                const xhtmlFiles = Object.keys(zip.files).filter(name => name.endsWith('.xhtml') || name.endsWith('.html'));
+                const arrayBuffer = await file.arrayBuffer();
+                const zip = new JSZip();
+                await zip.loadAsync(arrayBuffer);
 
-                for (const filename of xhtmlFiles) {
-                    const file = zip.files[filename];
-                    const content = await file.async('string');
+                let opfPath = null;
+                let opfBaseDir = '';
 
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(content, 'application/xhtml+xml');
-                    const pTags = doc.querySelectorAll('p');
+                const containerXmlFile = zip.file('META-INF/container.xml');
+                if (!containerXmlFile) throw new Error("META-INF/container.xml not found.");
+                const containerXmlContent = await containerXmlFile.async('string');
 
-                    pTags.forEach(p => {
-                        const text = p.textContent.trim();
-                        if (text) paragraphs.push(text);
-                    });
-                }
+                const parser = new DOMParser();
+                const containerDoc = parser.parseFromString(containerXmlContent, 'application/xml');
+                const rootfileElement = containerDoc.querySelector('rootfile[media-type="application/oebps-package+xml"]');
 
-                localStorage.setItem('paragraphs', JSON.stringify(paragraphs));
-                setTimeout(() => read(paragraphs), 5000); // Start reading after 5 seconds
-
-
-
-
-            };
-            reader.readAsArrayBuffer(file);
-        }
-        var reading = false
-        document.onkeydown = (e) => {
-            if (e.key === " ") {
-                if (reading) {
-                    reading = false;
-                    document.getElementById('output').innerHTML = 'Paused. Press space to resume.';
+                if (rootfileElement) {
+                    opfPath = rootfileElement.getAttribute('full-path');
+                    opfBaseDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
                 } else {
-                    reading = true;
-                    read(JSON.parse(localStorage.getItem('paragraphs') || '[]'));
+                    throw new Error("OPF file not found in container.xml.");
                 }
+
+                const opfFile = zip.file(opfPath);
+                if (!opfFile) throw new Error(`OPF file not found: ${opfPath}`);
+                const opfContent = await opfFile.async('string');
+                const opfDoc = parser.parseFromString(opfContent, 'application/xml');
+
+                const itemRefs = opfDoc.querySelectorAll('spine itemref');
+                const manifestItems = opfDoc.querySelectorAll('manifest item');
+                const contentFilesMap = new Map();
+
+                manifestItems.forEach(item => {
+                    const id = item.getAttribute('id');
+                    const href = item.getAttribute('href');
+                    const mediaType = item.getAttribute('media-type');
+                    if (id && href && (mediaType === 'application/xhtml+xml' || mediaType === 'text/html')) {
+                        contentFilesMap.set(id, href);
+                    }
+                });
+
+                for (const itemRef of itemRefs) {
+                    const idRef = itemRef.getAttribute('idref');
+                    if (contentFilesMap.has(idRef)) {
+                        const htmlRelativePath = contentFilesMap.get(idRef);
+                        const htmlFullPath = opfBaseDir + htmlRelativePath;
+
+                        const htmlFile = zip.file(htmlFullPath);
+                        if (htmlFile) {
+                            const htmlContent = await htmlFile.async('string');
+                            const htmlDoc = parser.parseFromString(htmlContent, 'text/html');
+                            const pElements = htmlDoc.querySelectorAll('p');
+
+                            pElements.forEach(p => {
+                                const text = p.textContent.trim();
+                                if (text) {
+                                    allParagraphs.push(`<p>${text}</p>`);
+                                }
+                            });
+                        } else {
+                            console.warn(`Warning: HTML file not found in ZIP: ${htmlFullPath}`);
+                        }
+                    } else {
+                        console.warn(`Warning: ItemRef ID '${idRef}' not found in manifest or is not an HTML type.`);
+                    }
+                }
+
+                if (allParagraphs.length > 0) {
+                    localStorage.setItem(LAST_PROCESSED_PARAGRAPHS_KEY, JSON.stringify(allParagraphs));
+                    loadReadingSpot();
+                    displayCurrentParagraph(); // Display current paragraph (which will also increment words)
+                    enableControls();
+                    startButton.disabled = false;
+                    pauseResumeButton.disabled = true;
+                } else {
+                    outputDiv.textContent = "No readable paragraphs found in this EPUB.";
+                    disableControls();
+                    localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
+                    localStorage.removeItem(CURRENT_READER_SPOT_KEY);
+                }
+
+            } catch (error) {
+                outputDiv.textContent = `Error: ${error.message}`;
+                console.error(error);
+                allParagraphs = [];
+                disableControls();
+                localStorage.removeItem(LAST_SELECTED_FILE_KEY);
+                localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
+                localStorage.removeItem(CURRENT_READER_SPOT_KEY);
             }
         }
+
+        // Function to run on page load
+        function loadPreviousSelection() {
+            loadTotalWordsRead(); // Load total words first
+
+            const lastSelectedFileData = localStorage.getItem(LAST_SELECTED_FILE_KEY);
+            const lastProcessedParagraphs = localStorage.getItem(LAST_PROCESSED_PARAGRAPHS_KEY);
+
+            disableControls();
+
+            if (lastSelectedFileData && lastProcessedParagraphs) {
+                try {
+                    const fileInfo = JSON.parse(lastSelectedFileData);
+                    allParagraphs = JSON.parse(lastProcessedParagraphs);
+
+                    messageDiv.innerHTML = `
+                        <p>You previously processed "<strong>${fileInfo.name}</strong>" (last processed on ${new Date(fileInfo.timestamp).toLocaleString()}).</p>
+                        <p>If you wish to re-process, select the file again. Otherwise, you can continue reading.</p>
+                    `;
+                    messageDiv.style.display = 'block';
+
+                    if (allParagraphs.length > 0) {
+                        loadReadingSpot();
+                        displayCurrentParagraph(); // Will also update word count for the displayed paragraph
+                        enableControls();
+                        pauseResumeButton.disabled = true;
+                    } else {
+                        outputDiv.textContent = 'No previously processed content found for this file (or it was empty).';
+                        localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
+                        localStorage.removeItem(CURRENT_READER_SPOT_KEY);
+                    }
+
+                } catch (e) {
+                    console.error("Error parsing stored data:", e);
+                    outputDiv.textContent = 'Could not load previous data. Please select a file.';
+                    localStorage.removeItem(LAST_SELECTED_FILE_KEY);
+                    localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
+                    localStorage.removeItem(CURRENT_READER_SPOT_KEY);
+                }
+            } else {
+                outputDiv.textContent = 'Select an EPUB file to begin.';
+            }
+            updateStatus();
+        }
+
+        // Call this function when the page loads
+        window.addEventListener('load', loadPreviousSelection);
+        // Save current spot if user closes tab/navigates away
+        window.addEventListener('beforeunload', saveReadingSpot);
     </script>
 </body>
-
 </html>
