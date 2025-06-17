@@ -691,10 +691,16 @@
                 document.getElementById('playAudioButton').click(); // Trigger play/pause audio           
                 }
                 else if (event.key === 'ArrowRight') {
+                event.preventDefault(); // Prevent scrolling down 
+                stopSpeech(); // Stop speech when going forward
                     document.getElementById('nextButton').click(); // Trigger next paragraph
+                    playCurrentParagraphAudio(); // Start speaking the next paragraph
                 }
                 else if (event.key === 'ArrowLeft') {
+                event.preventDefault(); // Prevent scrolling down 
+                stopSpeech(); // Stop speech when going back
                     document.getElementById('prevButton').click(); // Trigger previous paragraph
+                    playCurrentParagraphAudio(); // Start speaking the previous paragraph
                 }   
         });
 
