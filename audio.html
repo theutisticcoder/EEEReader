@@ -686,7 +686,7 @@
 
         // --- Keyboard Listener for Spacebar ---
         document.addEventListener('keydown', (event) => {
-            if (event.code === ' ') {
+            if (event.code === 'Space') {
                 event.preventDefault(); // Prevent scrolling down 
                 document.getElementById('playAudioButton').click(); // Trigger play/pause audio           
                 }
@@ -790,7 +790,6 @@
                     isSpeaking = false;
                     clearHighlights();
                     updateStatus();
-                    alert(`Speech error: ${event.error}. Try a different voice or a shorter paragraph.`);
                 };
                 // Highlight words as they are spoken
                 utterance.onboundary = (event) => {

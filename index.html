@@ -433,6 +433,14 @@
                 event.preventDefault();
                 togglePauseResume();
             }
+            if(event.code === 'ArrowRight') {
+                event.preventDefault();
+                showNextParagraph();
+            }
+            if(event.code === 'ArrowLeft') {
+                event.preventDefault();
+                showPrevParagraph();
+            }
         });
 
         // --- Main EPUB Processing ---
