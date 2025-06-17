@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EPUB Paragraph Extractor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/epub.js/0.3.93/epub.min.js"></script>
+</head>
+<body>
+    <input type="file" id="epubFile" accept=".epub">
+    <button onclick="processEpub()">Extract Paragraphs</button>
+    <div id="output"></div>
+
+    <script>
+        async function processEpub() {
+            const fileInput = document.getElementById('epubFile');
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = 'Loading EPUB...';
+
+            if (!fileInput.files.length) {
+                outputDiv.innerHTML = 'Please select an EPUB file.';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = async (e) => {
+                const arrayBuffer = e.target.result;
+                const book = Epub(arrayBuffer);
+                const paragraphs = [];
+
+                await book.ready;
+
+                book.spine.each((section) => {
+                    section.load(book.load.bind(book)).then((contents) => {
+                        if (contents instanceof Document && contents.body) {
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = contents.body.innerHTML;
+                            const pTags = tempDiv.querySelectorAll('p');
+                            pTags.forEach(p => {
+                                const text = p.textContent.trim();
+                                if (text) {
+                                    paragraphs.push(`<p>${text}</p>`);
+                                }
+                            });
+                        }
+                        // Once all sections are processed (you might need a counter or Promise.all)
+                        // This simple example just logs as sections load
+                        outputDiv.innerHTML = `<pre>${paragraphs.join('\n')}</pre>`;
+                    }).catch(error => {
+                        console.error('Error loading section:', error);
+                    });
+                });
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+</body>
+</html>
