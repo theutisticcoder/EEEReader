@@ -686,9 +686,9 @@
         // --- Keyboard Listener for Spacebar ---
         document.addEventListener('keydown', (event) => {
             if (event.code === ' ') {
-                event.preventDefault(); // Prevent scrolling down
-                togglePauseResume();
-            }
+                event.preventDefault(); // Prevent scrolling down 
+                document.getElementById('playAudioButton').click(); // Trigger play/pause audio           
+                }
         });
 
         // --- Web Speech API (TTS) Functions ---
