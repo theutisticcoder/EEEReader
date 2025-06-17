@@ -539,7 +539,7 @@
 
         /** Initiates or restarts the auto-advance reading mode. */
         function startReading() {
-            if (!isPlaying || allParagraphs.length === 0) return;
+            if (isPlaying || allParagraphs.length === 0) return;
 
             // If speech is active, stop it and rely on the auto-advance timer
             if (isSpeaking) {
