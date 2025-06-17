@@ -509,6 +509,7 @@
                 }
             }
             displayCurrentParagraph(); // Update display
+            isPlaying = true;
             // If auto-advance was active, restart the interval (unless speech takes over)
             if (isPlaying && !isSpeaking) {
                 startReading(); // This will clear and restart the interval
@@ -711,6 +712,7 @@
                 utterance = new SpeechSynthesisUtterance();
                 // Set up event listeners for utterance
                 utterance.onend = () => {
+                    isSpeaking = false;
                     clearHighlights();
                     updateStatus();
                     // When speech ends, automatically advance to next paragraph if auto-advance is enabled
