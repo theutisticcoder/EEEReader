@@ -1,11 +1,23 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>EEEReader</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 20px; }
-        #message { margin-top: 10px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; display: none; }
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        #message {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+            display: none;
+        }
+
         #output {
             white-space: pre-wrap;
             word-wrap: break-word;
@@ -19,11 +31,31 @@
             font-size: 1.1em;
             line-height: 1.6;
         }
-        #controls { margin-top: 15px; }
-        #status { margin-top: 10px; font-weight: bold; }
-        #wordsReadDiv { margin-top: 10px; font-style: italic; color: #555; }
-        button { padding: 8px 15px; margin-right: 10px; cursor: pointer; }
-        input[type="file"] { margin-right: 10px; }
+
+        #controls {
+            margin-top: 15px;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        #wordsReadDiv {
+            margin-top: 10px;
+            font-style: italic;
+            color: #555;
+        }
+
+        button {
+            padding: 8px 15px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        input[type="file"] {
+            margin-right: 10px;
+        }
 
         #chapterNav {
             margin-top: 20px;
@@ -34,6 +66,7 @@
             overflow-y: auto;
             display: none;
         }
+
         #chapterNav button {
             display: block;
             width: 100%;
@@ -49,9 +82,11 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+
         #chapterNav button:hover {
             background-color: #d0d0d0;
         }
+
         #chapterNav button.active {
             background-color: #4CAF50;
             color: white;
@@ -66,6 +101,7 @@
             max-height: 250px;
             overflow-y: auto;
         }
+
         .saved-book-item {
             display: flex;
             justify-content: space-between;
@@ -73,19 +109,23 @@
             padding: 5px 0;
             border-bottom: 1px dotted #ddf;
         }
+
         .saved-book-item:last-child {
             border-bottom: none;
         }
+
         .saved-book-item span {
             flex-grow: 1;
             padding-right: 10px;
         }
+
         .saved-book-item button {
             margin-left: 5px;
             padding: 5px 10px;
         }
     </style>
 </head>
+
 <body>
     <h1>EPUB Paragraph Reader</h1>
 
@@ -97,7 +137,7 @@
     <div id="savedBooksList">
         <h2>Your Saved Books:</h2>
         <div id="savedBooksContainer">
-            </div>
+        </div>
         <button onclick="clearAllSavedBooks()" style="margin-top: 10px;">Clear All Saved Books</button>
     </div>
 
@@ -116,7 +156,7 @@
 
     <div id="chapterNav">
         <h2>Chapters:</h2>
-        </div>
+    </div>
 
     <div id="output"></div>
 
@@ -311,8 +351,8 @@
             // Only switch if it's a different chapter OR if we're not at paragraph 0
             // This prevents re-loading if already on the same chapter and at the beginning
             if (chapterIndex === currentChapterIndex && currentIndex === 0) {
-                 displayCurrentParagraph();
-                 return;
+                displayCurrentParagraph();
+                return;
             }
 
             pauseReading();
@@ -383,7 +423,8 @@
             setTimeout(() => {
                 if (isPlaying) {
                     intervalId = setInterval(showNextParagraph, displayInterval);
-                }
+                    console.log(allParagraphs[currentIndex] * 120);
+        }
             }, parseInt(countWords(allParagraphs[currentIndex]) * 120)); // Initial delay based on first paragraph length
         }
 
@@ -438,11 +479,11 @@
                 event.preventDefault();
                 togglePauseResume();
             }
-            if(event.code === 'ArrowRight') {
+            if (event.code === 'ArrowRight') {
                 event.preventDefault();
                 showNextParagraph();
             }
-            if(event.code === 'ArrowLeft') {
+            if (event.code === 'ArrowLeft') {
                 event.preventDefault();
                 showPrevParagraph();
             }
@@ -537,7 +578,7 @@
                     if (ncxItem) {
                         tocHref = ncxItem.getAttribute('href');
                     } else {
-                         console.warn("No standard TOC found. Using spine as chapters.");
+                        console.warn("No standard TOC found. Using spine as chapters.");
                     }
                 }
 
@@ -591,18 +632,18 @@
                 }
 
                 if (chapters.length === 0) {
-                     const spineItems = opfDoc.querySelectorAll('spine itemref');
-                     let chapterCounter = 1;
-                     for (const itemRef of spineItems) {
-                         const idRef = itemRef.getAttribute('idref');
-                         const href = idToHrefMap.get(idRef);
-                         if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
-                             const cleanHref = resolvePath(opfBaseDir, href).split('#')[0];
-                             if (!chapters.some(ch => ch.href === cleanHref)) {
+                    const spineItems = opfDoc.querySelectorAll('spine itemref');
+                    let chapterCounter = 1;
+                    for (const itemRef of spineItems) {
+                        const idRef = itemRef.getAttribute('idref');
+                        const href = idToHrefMap.get(idRef);
+                        if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
+                            const cleanHref = resolvePath(opfBaseDir, href).split('#')[0];
+                            if (!chapters.some(ch => ch.href === cleanHref)) {
                                 chapters.push({ title: `Chapter ${chapterCounter++}`, href: cleanHref, rawParagraphs: [] });
-                             }
-                         }
-                     }
+                            }
+                        }
+                    }
                 }
 
                 for (let i = 0; i < chapters.length; i++) {
@@ -791,7 +832,7 @@
                     const lastBookId = generateBookId(fileInfo);
                     bookToAutoLoad = savedBooks.find(b => b.id === lastBookId);
                 }
-                
+
                 // If not found (e.g., deleted), or no previous, just load the first book
                 if (!bookToAutoLoad) {
                     bookToAutoLoad = savedBooks[0];
@@ -814,4 +855,5 @@
         window.addEventListener('beforeunload', saveCurrentBookSpot); // Save current book's spot when leaving
     </script>
 </body>
+
 </html>
