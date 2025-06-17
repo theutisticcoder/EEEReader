@@ -379,12 +379,10 @@
 
             isPlaying = true;
             updateStatus();
-             
+            displayCurrentParagraph();
             setTimeout(() => {
                 if (isPlaying) {
                     intervalId = setInterval(showNextParagraph, displayInterval);
-            displayCurrentParagraph();
-
                 }
             }, parseInt(countWords(allParagraphs[currentIndex]) * 120)); // Initial delay based on first paragraph length
         }
