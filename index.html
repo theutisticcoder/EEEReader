@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <title>EPUB SpeeedReadee</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/epub.js/0.3.93/epub.min.js"></script>
+    <title>EPUB SpeeedReader</title>
+    <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
 </head>
+
 <body>
     <input type="file" id="epubFile" accept=".epub">
     <button onclick="processEpub()">Extract Paragraphs</button>
@@ -12,27 +14,27 @@
     <script>
         var num = 0;
         num = localStorage.getItem('num') ? parseInt(localStorage.getItem('num')) : 0;
-        function read (book){
-        document.getElementById('output').innerHTML = book[num];
-        num++;
-        localStorage.setItem('num', num); // Save the current paragraph index
-        if (num >= book.length) {
-            num = 0; // Reset to the first paragraph after reaching the end
-        
+        function read(book) {
+            document.getElementById('output').innerHTML = book[num];
+            num++;
+            localStorage.setItem('num', num); // Save the current paragraph index
+            if (num >= book.length) {
+                num = 0; // Reset to the first paragraph after reaching the end
+
+            }
+            else {
+                setTimeout(function () { read(book); }, 5000); // Change paragraph every 5 seconds
+                wpm();
+            }
         }
-        else {
-            setTimeout(function() { read(book); }, 5000); // Change paragraph every 5 seconds
-            wpm();
+        var totalread = localStorage.getItem('totalread') ? parseInt(localStorage.getItem('totalread')) : 0;
+        function wpm() {
+            const words = document.getElementById('output').textContent.split(' ').length;
+            var wpm = Math.round((words / 5) * 60); // Assuming 5 seconds per paragraph
+            totalread += words;
+            localStorage.setItem('totalread', totalread); // Save total words read
         }
-    }
-    var totalread = localStorage.getItem('totalread') ? parseInt(localStorage.getItem('totalread')) : 0;
-    function wpm (){
-        const words = document.getElementById('output').textContent.split(' ').length;
-        var wpm = Math.round((words / 5) * 60); // Assuming 5 seconds per paragraph
-        totalread += words;
-        localStorage.setItem('totalread', totalread); // Save total words read
-    }
-    function loadParagraphs() {
+        function loadParagraphs() {
             const paragraphs = JSON.parse(localStorage.getItem('paragraphs') || '[]');
             if (paragraphs.length > 0) {
                 setTimeout(() => read(paragraphs), 3000); // Start reading after 3 seconds
@@ -75,7 +77,7 @@
                             localStorage.setItem('paragraphs', JSON.stringify(paragraphs));
                             setTimeout(() => read(paragraphs), 5000); // Start reading after 5 seconds
                         }
-                        
+
                     }).catch(error => {
                         console.error('Error loading section:', error);
                     });
@@ -85,7 +87,7 @@
         }
         var reading = false
         document.onkeydown = (e) => {
-            if(e.key === " ") {
+            if (e.key === " ") {
                 if (reading) {
                     reading = false;
                     document.getElementById('output').innerHTML = 'Paused. Press space to resume.';
@@ -93,8 +95,9 @@
                     reading = true;
                     read(JSON.parse(localStorage.getItem('paragraphs') || '[]'));
                 }
-            }   
+            }
         }
     </script>
 </body>
+
 </html>
