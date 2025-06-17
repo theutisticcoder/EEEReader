@@ -57,7 +57,7 @@
 
             reader.onload = async (e) => {
                 const arrayBuffer = e.target.result;
-                const book = Epub(arrayBuffer);
+                const book = ePub(arrayBuffer);
                 const paragraphs = [];
 
                 await book.ready;
