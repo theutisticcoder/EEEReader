@@ -57,6 +57,33 @@
             color: white;
             border-color: #4CAF50;
         }
+
+        #savedBooksList {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #cce;
+            background-color: #eef;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .saved-book-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 0;
+            border-bottom: 1px dotted #ddf;
+        }
+        .saved-book-item:last-child {
+            border-bottom: none;
+        }
+        .saved-book-item span {
+            flex-grow: 1;
+            padding-right: 10px;
+        }
+        .saved-book-item button {
+            margin-left: 5px;
+            padding: 5px 10px;
+        }
     </style>
 </head>
 <body>
@@ -65,7 +92,14 @@
     <div id="message"></div>
 
     <input type="file" id="epubFile" accept=".epub">
-    <button onclick="processEpub()">Load & Process EPUB</button>
+    <button onclick="processEpub()">Load & Process New EPUB</button>
+
+    <div id="savedBooksList">
+        <h2>Your Saved Books:</h2>
+        <div id="savedBooksContainer">
+            </div>
+        <button onclick="clearAllSavedBooks()" style="margin-top: 10px;">Clear All Saved Books</button>
+    </div>
 
     <div id="controls">
         <button id="startButton" onclick="startReading()" disabled>Start Reading</button>
@@ -86,12 +120,12 @@
     <div id="output"></div>
 
     <script>
-        const LAST_SELECTED_FILE_KEY = 'lastSelectedEpubFile';
-        const LAST_PROCESSED_PARAGRAPHS_KEY = 'lastProcessedEpubParagraphs';
-        const CURRENT_READER_SPOT_KEY = 'epubReaderCurrentSpot';
+        // Updated localStorage Keys
+        const SAVED_BOOKS_KEY = 'epubReaderSavedBooks';
         const TOTAL_WORDS_READ_KEY = 'totalWordsRead';
-        const CURRENT_CHAPTER_SPOT_KEY = 'epubReaderCurrentChapter';
 
+        // Global state for the CURRENTLY ACTIVE book
+        let activeBookId = null; // ID of the book currently loaded in the reader
         let allParagraphs = [];
         let currentIndex = 0;
         let currentChapterIndex = 0;
@@ -101,13 +135,16 @@
         const initialDelay = 2000;
 
         let totalWordsRead = 0;
-        let chapters = [];
+        let chapters = []; // Chapters of the CURRENTLY ACTIVE book
 
+        // DOM Elements
         const outputDiv = document.getElementById('output');
         const messageDiv = document.getElementById('message');
         const statusDiv = document.getElementById('status');
         const wordsReadDiv = document.getElementById('wordsReadDiv');
         const chapterNavDiv = document.getElementById('chapterNav');
+        const savedBooksContainer = document.getElementById('savedBooksContainer'); // New container for list
+
         const startButton = document.getElementById('startButton');
         const pauseResumeButton = document.getElementById('pauseResumeButton');
         const prevButton = document.getElementById('prevButton');
@@ -116,36 +153,31 @@
         const resetTotalWordsButton = document.getElementById('resetTotalWordsButton');
 
         // --- Utility Functions ---
+        function generateBookId(fileInfo) {
+            // A simple ID based on file name, size, and last modified date
+            return `${fileInfo.name}-${fileInfo.size}-${fileInfo.lastModified}`;
+        }
+
         function countWords(text) {
             if (!text) return 0;
             const words = text.trim().split(/\s+/);
             return words.filter(word => word.length > 0).length;
         }
 
-        // --- Path Resolution Helper ---
-        // This function attempts to resolve a relative path (href) against a base path,
-        // mimicking how a browser would resolve URLs.
         function resolvePath(basePath, relativePath) {
-            // Ensure base path ends with a slash if it's a directory
             if (basePath.length > 0 && basePath[basePath.length - 1] !== '/') {
                 basePath += '/';
             }
-
-            // Using URL constructor for robust path resolution
             try {
-                // The 'dummy://' scheme allows URL constructor to work with relative file paths
-                // then we extract the pathname which should be the resolved path
                 const resolvedUrl = new URL(relativePath, 'dummy://' + basePath);
-                // Remove the 'dummy://' part and leading slash if present, and any query/hash
                 let path = resolvedUrl.pathname;
-                if (path.startsWith('/')) path = path.substring(1); // Remove leading slash for ZIP entry names
+                if (path.startsWith('/')) path = path.substring(1);
                 return path;
             } catch (e) {
                 console.error("Path resolution error:", e, "Base:", basePath, "Relative:", relativePath);
-                return relativePath; // Fallback to original if resolution fails
+                return relativePath;
             }
         }
-
 
         // --- UI Control Functions ---
         function enableControls() {
@@ -166,6 +198,13 @@
             chapterNavDiv.style.display = 'none';
         }
 
+        function clearReaderDisplay() {
+            outputDiv.innerHTML = 'Select an EPUB file to begin.';
+            statusDiv.textContent = '';
+            chapterNavDiv.innerHTML = '<h2>Chapters:</h2>';
+            chapterNavDiv.style.display = 'none';
+        }
+
         function updateStatus() {
             if (allParagraphs.length === 0) {
                 statusDiv.textContent = "No content loaded.";
@@ -179,38 +218,34 @@
             wordsReadDiv.textContent = `Total words read across all books: ${totalWordsRead.toLocaleString()}`;
         }
 
-        function saveReadingSpot() {
-            localStorage.setItem(CURRENT_READER_SPOT_KEY, currentIndex.toString());
-            localStorage.setItem(CURRENT_CHAPTER_SPOT_KEY, currentChapterIndex.toString());
+        // --- Local Storage Management for Saved Books ---
+        function getSavedBooks() {
+            try {
+                const storedBooks = localStorage.getItem(SAVED_BOOKS_KEY);
+                return storedBooks ? JSON.parse(storedBooks) : [];
+            } catch (e) {
+                console.error("Error parsing saved books from localStorage:", e);
+                return [];
+            }
         }
 
-        function loadReadingSpot() {
-            const savedSpot = localStorage.getItem(CURRENT_READER_SPOT_KEY);
-            const savedChapter = localStorage.getItem(CURRENT_CHAPTER_SPOT_KEY);
+        function saveBooks(books) {
+            localStorage.setItem(SAVED_BOOKS_KEY, JSON.stringify(books));
+            renderSavedBooksList(); // Update the list display
+        }
 
-            if (savedChapter !== null && chapters.length > 0) {
-                const parsedChapter = parseInt(savedChapter, 10);
-                if (!isNaN(parsedChapter) && parsedChapter >= 0 && parsedChapter < chapters.length) {
-                    currentChapterIndex = parsedChapter;
-                    allParagraphs = chapters[currentChapterIndex].rawParagraphs || [];
-                } else {
-                    currentChapterIndex = 0;
-                    allParagraphs = chapters[0]?.rawParagraphs || [];
-                }
-            } else {
-                currentChapterIndex = 0;
-                allParagraphs = chapters[0]?.rawParagraphs || [];
-            }
+        function saveCurrentBookSpot() {
+            if (!activeBookId) return; // No book currently active
 
-            if (savedSpot !== null && allParagraphs.length > 0) {
-                const parsedSpot = parseInt(savedSpot, 10);
-                if (!isNaN(parsedSpot) && parsedSpot >= 0 && parsedSpot < allParagraphs.length) {
-                    currentIndex = parsedSpot;
-                } else {
-                    currentIndex = 0;
-                }
-            } else {
-                currentIndex = 0;
+            const books = getSavedBooks();
+            const bookIndex = books.findIndex(book => book.id === activeBookId);
+
+            if (bookIndex !== -1) {
+                books[bookIndex].lastReadSpot = {
+                    chapterIndex: currentChapterIndex,
+                    paragraphIndex: currentIndex
+                };
+                saveBooks(books);
             }
         }
 
@@ -271,20 +306,23 @@
 
         async function loadChapter(chapterIndex) {
             if (chapterIndex < 0 || chapterIndex >= chapters.length) return;
-            if (chapterIndex === currentChapterIndex && currentIndex === 0) { // Already on this chapter and at beginning
-                 displayCurrentParagraph(); // Just re-display
+
+            // Only switch if it's a different chapter OR if we're not at paragraph 0
+            // This prevents re-loading if already on the same chapter and at the beginning
+            if (chapterIndex === currentChapterIndex && currentIndex === 0) {
+                 displayCurrentParagraph();
                  return;
             }
 
             pauseReading();
             currentChapterIndex = chapterIndex;
-            currentIndex = 0;
+            currentIndex = 0; // Always start at the beginning of the new chapter
 
             allParagraphs = chapters[currentChapterIndex].rawParagraphs || [];
 
             displayCurrentParagraph();
             highlightActiveChapterButton();
-            saveReadingSpot();
+            saveCurrentBookSpot(); // Save the new chapter and paragraph spot for this book
         }
 
         // --- Paragraph Display and Navigation ---
@@ -301,7 +339,7 @@
 
             incrementTotalWordsRead(currentParagraphHTML);
 
-            saveReadingSpot();
+            saveCurrentBookSpot(); // Save spot every time paragraph changes
             updateStatus();
         }
 
@@ -326,7 +364,6 @@
             } else {
                 if (currentChapterIndex > 0) {
                     loadChapter(currentChapterIndex - 1);
-                    // Set current index to the last paragraph of the previous chapter
                     currentIndex = chapters[currentChapterIndex].rawParagraphs.length - 1;
                 } else {
                     alert("Already at the beginning of the book!");
@@ -355,7 +392,7 @@
             isPlaying = false;
             clearInterval(intervalId);
             intervalId = null;
-            saveReadingSpot();
+            saveCurrentBookSpot();
             updateStatus();
         }
 
@@ -377,13 +414,13 @@
         }
 
         function resetReadingSpot() {
+            if (!activeBookId || chapters.length === 0) return;
             if (confirm("Are you sure you want to reset your reading spot for this book to the beginning?")) {
                 pauseReading();
                 currentChapterIndex = 0;
                 currentIndex = 0;
-                localStorage.removeItem(CURRENT_READER_SPOT_KEY);
-                localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
-                loadChapter(0);
+                saveCurrentBookSpot(); // Update saved spot in localStorage
+                loadChapter(0); // Reload first chapter
             }
         }
 
@@ -395,7 +432,6 @@
             }
         }
 
-
         // --- Keyboard Listener for Spacebar ---
         document.addEventListener('keydown', (event) => {
             if (event.code === 'Space') {
@@ -404,12 +440,13 @@
             }
         });
 
-        // --- EPUB Parsing Logic ---
+        // --- Main EPUB Processing ---
         async function processEpub() {
             outputDiv.textContent = 'Loading EPUB...';
             messageDiv.style.display = 'none';
             disableControls();
             pauseReading();
+            clearReaderDisplay(); // Clear any previous book's display
 
             const fileInput = document.getElementById('epubFile');
             if (!fileInput.files.length) {
@@ -418,26 +455,41 @@
             }
 
             const file = fileInput.files[0];
+            const fileInfo = {
+                name: file.name,
+                size: file.size,
+                lastModified: file.lastModified,
+                timestamp: new Date().toISOString()
+            };
+            const newBookId = generateBookId(fileInfo);
+
+            // Check if this book is already saved
+            let savedBooks = getSavedBooks();
+            const existingBookIndex = savedBooks.findIndex(book => book.id === newBookId);
+            let bookToLoad = null;
+
+            if (existingBookIndex !== -1) {
+                // Book already exists, just load it
+                bookToLoad = savedBooks[existingBookIndex];
+                messageDiv.innerHTML = `<p>Book "<strong>${fileInfo.name}</strong>" is already saved. Loading from your last spot.</p>`;
+                messageDiv.style.display = 'block';
+                await loadBookDataIntoReader(bookToLoad); // Directly load from saved data
+                fileInput.value = ''; // Clear file input
+                return;
+            }
+
+            // If it's a new book, proceed with parsing
             allParagraphs = [];
             chapters = [];
+            activeBookId = null; // Clear active book ID until successfully processed
 
             try {
-                localStorage.setItem(LAST_SELECTED_FILE_KEY, JSON.stringify({
-                    name: file.name,
-                    size: file.size,
-                    lastModified: file.lastModified,
-                    timestamp: new Date().toISOString()
-                }));
-                localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
-                localStorage.removeItem(CURRENT_READER_SPOT_KEY);
-                localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
-
                 const arrayBuffer = await file.arrayBuffer();
                 const zip = new JSZip();
                 await zip.loadAsync(arrayBuffer);
 
                 let opfPath = null;
-                let opfBaseDir = ''; // Directory of content.opf within the zip
+                let opfBaseDir = '';
 
                 const containerXmlFile = zip.file('META-INF/container.xml');
                 if (!containerXmlFile) throw new Error("META-INF/container.xml not found.");
@@ -448,8 +500,6 @@
 
                 if (rootfileElement) {
                     opfPath = rootfileElement.getAttribute('full-path');
-                    // Calculate opfBaseDir correctly. If opfPath is just "content.opf", opfBaseDir should be empty string "".
-                    // If opfPath is "OEBPS/content.opf", opfBaseDir should be "OEBPS/".
                     opfBaseDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
                 } else {
                     throw new Error("OPF file not found in container.xml.");
@@ -484,10 +534,10 @@
                 }
 
                 let tocContent = null;
-                let tocBaseDir = opfBaseDir; // Default to opfBaseDir
+                let tocBaseDir = opfBaseDir;
                 if (tocHref) {
-                    tocBaseDir = resolvePath(opfBaseDir, tocHref).substring(0, resolvePath(opfBaseDir, tocHref).lastIndexOf('/') + 1); // Get directory of TOC file
-                    const tocFile = zip.file(resolvePath(opfBaseDir, tocHref)); // Resolve TOC file path relative to OPF base
+                    tocBaseDir = resolvePath(opfBaseDir, tocHref).substring(0, resolvePath(opfBaseDir, tocHref).lastIndexOf('/') + 1);
+                    const tocFile = zip.file(resolvePath(opfBaseDir, tocHref));
                     if (tocFile) {
                         tocContent = await tocFile.async('string');
                     } else {
@@ -502,9 +552,8 @@
                         const navPoints = navToc.querySelectorAll('li > a');
                         for (const navPoint of navPoints) {
                             const title = navPoint.textContent.trim();
-                            let href = navPoint.getAttribute('href'); // This href is relative to the TOC file!
+                            let href = navPoint.getAttribute('href');
                             if (href) {
-                                // Resolve href relative to the TOC file's directory
                                 const fullChapterHref = resolvePath(tocBaseDir, href);
                                 const cleanHref = fullChapterHref.split('#')[0];
                                 if (!chapters.some(ch => ch.href === cleanHref)) {
@@ -521,9 +570,8 @@
                         const content = navPoint.querySelector('content');
                         if (navLabel && content) {
                             const title = navLabel.textContent.trim();
-                            let src = content.getAttribute('src'); // This src is relative to the NCX file!
+                            let src = content.getAttribute('src');
                             if (src) {
-                                // Resolve src relative to the NCX file's directory
                                 const fullChapterHref = resolvePath(tocBaseDir, src);
                                 const cleanHref = fullChapterHref.split('#')[0];
                                 if (!chapters.some(ch => ch.href === cleanHref)) {
@@ -534,15 +582,14 @@
                     }
                 }
 
-                // Fallback: If no TOC, use spine items as chapters
                 if (chapters.length === 0) {
                      const spineItems = opfDoc.querySelectorAll('spine itemref');
                      let chapterCounter = 1;
                      for (const itemRef of spineItems) {
                          const idRef = itemRef.getAttribute('idref');
-                         const href = idToHrefMap.get(idRef); // This href is relative to OPF file
+                         const href = idToHrefMap.get(idRef);
                          if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
-                             const cleanHref = resolvePath(opfBaseDir, href).split('#')[0]; // Resolve relative to OPF base
+                             const cleanHref = resolvePath(opfBaseDir, href).split('#')[0];
                              if (!chapters.some(ch => ch.href === cleanHref)) {
                                 chapters.push({ title: `Chapter ${chapterCounter++}`, href: cleanHref, rawParagraphs: [] });
                              }
@@ -550,10 +597,8 @@
                      }
                 }
 
-                // Now, load and parse paragraphs for each chapter based on its resolved full path
                 for (let i = 0; i < chapters.length; i++) {
                     const chapter = chapters[i];
-                    // The chapter.href is now already the full path relative to ZIP root, thanks to resolvePath
                     const htmlFile = zip.file(chapter.href);
 
                     if (htmlFile) {
@@ -576,23 +621,30 @@
 
                 chapters = chapters.filter(ch => ch.rawParagraphs && ch.rawParagraphs.length > 0);
 
-
                 if (chapters.length > 0) {
-                    localStorage.setItem(LAST_PROCESSED_PARAGRAPHS_KEY, JSON.stringify(chapters));
+                    // Create the new book object
+                    const newBook = {
+                        id: newBookId,
+                        metadata: fileInfo,
+                        chapters: chapters,
+                        lastReadSpot: { chapterIndex: 0, paragraphIndex: 0 } // Default to start of book
+                    };
 
-                    loadReadingSpot();
-                    displayCurrentParagraph();
-                    displayChapterButtons();
-                    highlightActiveChapterButton();
-                    enableControls();
-                    startButton.disabled = false;
-                    pauseResumeButton.disabled = true;
+                    // Add/update this book in the saved books list
+                    if (existingBookIndex !== -1) {
+                        savedBooks[existingBookIndex] = newBook; // Update existing
+                    } else {
+                        savedBooks.push(newBook); // Add new
+                    }
+                    saveBooks(savedBooks);
+
+                    // Load this newly processed book into the reader
+                    await loadBookDataIntoReader(newBook);
+                    fileInput.value = ''; // Clear file input after processing
                 } else {
                     outputDiv.textContent = "No readable chapters or paragraphs found in this EPUB.";
                     disableControls();
-                    localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
-                    localStorage.removeItem(CURRENT_READER_SPOT_KEY);
-                    localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
+                    activeBookId = null;
                 }
 
             } catch (error) {
@@ -600,64 +652,158 @@
                 console.error(error);
                 allParagraphs = [];
                 chapters = [];
+                activeBookId = null;
                 disableControls();
-                localStorage.removeItem(LAST_SELECTED_FILE_KEY);
-                localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
-                localStorage.removeItem(CURRENT_READER_SPOT_KEY);
-                localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
             }
         }
 
-        // Function to run on page load
-        function loadPreviousSelection() {
-            loadTotalWordsRead();
+        // --- Load a previously saved book into the reader ---
+        async function loadBookDataIntoReader(book) {
+            pauseReading(); // Stop any currently playing book
 
-            const lastSelectedFileData = localStorage.getItem(LAST_SELECTED_FILE_KEY);
-            const lastProcessedChapters = localStorage.getItem(LAST_PROCESSED_PARAGRAPHS_KEY);
+            activeBookId = book.id;
+            chapters = book.chapters;
 
-            disableControls();
+            // Load saved spot or default to beginning
+            const spot = book.lastReadSpot || { chapterIndex: 0, paragraphIndex: 0 };
+            currentChapterIndex = spot.chapterIndex;
+            currentIndex = spot.paragraphIndex;
 
-            if (lastSelectedFileData && lastProcessedChapters) {
-                try {
-                    const fileInfo = JSON.parse(lastSelectedFileData);
-                    chapters = JSON.parse(lastProcessedChapters);
+            // Ensure the loaded chapter index is valid
+            if (currentChapterIndex < 0 || currentChapterIndex >= chapters.length) {
+                currentChapterIndex = 0;
+            }
+            allParagraphs = chapters[currentChapterIndex]?.rawParagraphs || [];
 
-                    messageDiv.innerHTML = `
-                        <p>You previously processed "<strong>${fileInfo.name}</strong>" (last processed on ${new Date(fileInfo.timestamp).toLocaleString()}).</p>
-                        <p>If you wish to re-process, select the file again. Otherwise, you can continue reading.</p>
-                    `;
-                    messageDiv.style.display = 'block';
+            // Ensure the loaded paragraph index is valid
+            if (currentIndex < 0 || currentIndex >= allParagraphs.length) {
+                currentIndex = 0;
+            }
 
-                    if (chapters.length > 0) {
-                        loadReadingSpot();
-                        displayCurrentParagraph();
-                        displayChapterButtons();
-                        highlightActiveChapterButton();
-                        enableControls();
-                        pauseResumeButton.disabled = true;
-                    } else {
-                        outputDiv.textContent = 'No previously processed content found for this book (or it was empty).';
-                        localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
-                        localStorage.removeItem(CURRENT_READER_SPOT_KEY);
-                        localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
-                    }
-
-                } catch (e) {
-                    console.error("Error parsing stored data:", e);
-                    outputDiv.textContent = 'Could not load previous data. Please select a file.';
-                    localStorage.removeItem(LAST_SELECTED_FILE_KEY);
-                    localStorage.removeItem(LAST_PROCESSED_PARAGRAPHS_KEY);
-                    localStorage.removeItem(CURRENT_READER_SPOT_KEY);
-                    localStorage.removeItem(CURRENT_CHAPTER_SPOT_KEY);
-                }
+            if (allParagraphs.length > 0) {
+                displayCurrentParagraph();
+                displayChapterButtons();
+                highlightActiveChapterButton();
+                enableControls();
+                startButton.disabled = false;
+                pauseResumeButton.disabled = true; // Disabled until start is pressed
             } else {
-                outputDiv.textContent = 'Select an EPUB file to begin.';
+                outputDiv.textContent = `No readable content found for "${book.metadata.name}" in saved data.`;
+                disableControls();
             }
             updateStatus();
         }
 
-        window.addEventListener('load', loadPreviousSelection);
-        window.addEventListener('beforeunload', saveReadingSpot);
+        // --- Saved Books List Management ---
+        function renderSavedBooksList() {
+            savedBooksContainer.innerHTML = ''; // Clear current list
+            const books = getSavedBooks();
+
+            if (books.length === 0) {
+                savedBooksContainer.innerHTML = '<p>No books saved yet. Load an EPUB above!</p>';
+                return;
+            }
+
+            books.forEach(book => {
+                const bookItem = document.createElement('div');
+                bookItem.classList.add('saved-book-item');
+
+                const bookInfo = document.createElement('span');
+                bookInfo.textContent = book.metadata.name;
+                bookItem.appendChild(bookInfo);
+
+                const loadButton = document.createElement('button');
+                loadButton.textContent = 'Load';
+                loadButton.onclick = () => loadBookDataIntoReader(book);
+                bookItem.appendChild(loadButton);
+
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Delete';
+                deleteButton.onclick = () => deleteSavedBook(book.id);
+                bookItem.appendChild(deleteButton);
+
+                savedBooksContainer.appendChild(bookItem);
+            });
+        }
+
+        function deleteSavedBook(bookId) {
+            if (confirm("Are you sure you want to delete this book from your saved list?")) {
+                let books = getSavedBooks();
+                books = books.filter(book => book.id !== bookId);
+                saveBooks(books); // Save updated list
+
+                if (activeBookId === bookId) {
+                    // If the deleted book was currently active, clear reader
+                    activeBookId = null;
+                    allParagraphs = [];
+                    chapters = [];
+                    currentIndex = 0;
+                    currentChapterIndex = 0;
+                    pauseReading(); // Stop any active reading
+                    clearReaderDisplay();
+                    disableControls();
+                    updateStatus();
+                }
+            }
+        }
+
+        function clearAllSavedBooks() {
+            if (confirm("Are you sure you want to clear ALL saved books? This cannot be undone.")) {
+                localStorage.removeItem(SAVED_BOOKS_KEY);
+                renderSavedBooksList(); // Update UI
+                // Also clear the currently active book if any
+                activeBookId = null;
+                allParagraphs = [];
+                chapters = [];
+                currentIndex = 0;
+                currentChapterIndex = 0;
+                pauseReading();
+                clearReaderDisplay();
+                disableControls();
+                updateStatus();
+            }
+        }
+
+        // --- Initial Load ---
+        function initializeReader() {
+            loadTotalWordsRead();
+            renderSavedBooksList(); // Display saved books list on load
+            clearReaderDisplay(); // Clear reader area initially
+            disableControls(); // Disable controls until a book is loaded
+            updateStatus();
+
+            // Auto-load the "last used" book if available (can be disabled if preferred)
+            const savedBooks = getSavedBooks();
+            if (savedBooks.length > 0) {
+                // Find the most recently processed book, or simply the first one
+                const lastProcessedBookInfo = localStorage.getItem(LAST_SELECTED_FILE_KEY);
+                let bookToAutoLoad = null;
+                if (lastProcessedBookInfo) {
+                    const fileInfo = JSON.parse(lastProcessedBookInfo);
+                    const lastBookId = generateBookId(fileInfo);
+                    bookToAutoLoad = savedBooks.find(b => b.id === lastBookId);
+                }
+                
+                // If not found (e.g., deleted), or no previous, just load the first book
+                if (!bookToAutoLoad) {
+                    bookToAutoLoad = savedBooks[0];
+                }
+
+                if (bookToAutoLoad) {
+                    loadBookDataIntoReader(bookToAutoLoad);
+                    messageDiv.innerHTML = `<p>Automatically loaded "<strong>${bookToAutoLoad.metadata.name}</strong>".</p>`;
+                    messageDiv.style.display = 'block';
+                }
+            }
+            // Remove the old LAST_SELECTED_FILE_KEY as it's now redundant
+            localStorage.removeItem(LAST_SELECTED_FILE_KEY);
+            localStorage.removeItem('lastProcessedEpubParagraphs'); // Old key for chapters
+            localStorage.removeItem('epubReaderCurrentSpot'); // Old reader spot keys
+            localStorage.removeItem('epubReaderCurrentChapter');
+        }
+
+        window.addEventListener('load', initializeReader);
+        window.addEventListener('beforeunload', saveCurrentBookSpot); // Save current book's spot when leaving
     </script>
 </body>
 </html>
