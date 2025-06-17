@@ -471,7 +471,6 @@
 
         /** Displays the paragraph at the current `currentIndex`. */
         function displayCurrentParagraph() {
-            stopSpeech(); // Always stop existing speech before displaying new content
             clearHighlights(); // Clear highlights from previous paragraph
 
             if (allParagraphs.length === 0) {
