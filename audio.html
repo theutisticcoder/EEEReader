@@ -711,7 +711,6 @@
                 utterance = new SpeechSynthesisUtterance();
                 // Set up event listeners for utterance
                 utterance.onend = () => {
-                    isSpeaking = false;
                     clearHighlights();
                     updateStatus();
                     // When speech ends, automatically advance to next paragraph if auto-advance is enabled
