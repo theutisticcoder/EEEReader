@@ -59,6 +59,7 @@
             }
         }
         async function processEpub() {
+            var paragraphs = [];
             const fileInput = document.getElementById('epubFile');
             const outputDiv = document.getElementById('output');
             outputDiv.innerHTML = 'Loading EPUB...';
