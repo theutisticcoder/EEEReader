@@ -3,22 +3,25 @@
 
 <head>
     <title>EPUB SpeeedReader</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/epub.js/0.2.13/epub.min.js" integrity="sha512-ktwncEGc1G2bleGfAdTgIxyHiE5/syR19HWAN3S0soSHF8+q7E73POq13slxkTwYrJF9rVFKaKh1zbZhKK9vdg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@evidentpoint/readium-js@1.0.0-alpha.1/dist/readium-js.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
         }
+
         #output {
             margin-top: 20px;
             font-size: 1.2em;
         }
+
         button {
             margin-top: 10px;
             padding: 10px 15px;
             font-size: 1em;
         }
     </style>
+
 <body>
     <input type="file" id="epubFile" accept=".epub">
     <button onclick="processEpub()">Extract Paragraphs</button>
@@ -55,49 +58,117 @@
                 document.getElementById('output').innerHTML = 'No paragraphs found. Please process an EPUB file first.';
             }
         }
-        async function processEpub() {
-            const fileInput = document.getElementById('epubFile');
+        async function extractEpubContent() {
+            const fileInput = document.getElementById('epubFileInput');
             const outputDiv = document.getElementById('output');
-            outputDiv.innerHTML = 'Loading EPUB...';
+            outputDiv.innerHTML = 'Loading...';
 
-            if (!fileInput.files.length) {
+            const file = fileInput.files[0];
+            if (!file) {
                 outputDiv.innerHTML = 'Please select an EPUB file.';
                 return;
             }
 
-            const file = fileInput.files[0];
-            const reader = new FileReader();
+            try {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const arrayBuffer = e.target.result;
+                    const zip = await JSZip.loadAsync(arrayBuffer);
 
-            reader.onload = async (e) => {
-                const arrayBuffer = e.target.result;
-                const book = ePub(arrayBuffer);
-                const paragraphs = [];
+                    let opfPath = null;
+                    const paragraphs = [];
+                    const htmlFilesContent = {}; // Store HTML content by path
 
-                await book.ready;
+                    // Step 1: Find container.xml
+                    const containerFile = zip.file('META-INF/container.xml');
+                    if (!containerFile) {
+                        throw new Error('META-INF/container.xml not found.');
+                    }
+                    const containerXml = await containerFile.async('text');
 
-                book.spine.each((section) => {
-                    section.load(book.load.bind(book)).then((contents) => {
-                        if (contents instanceof Document && contents.body) {
-                            const tempDiv = document.createElement('div');
-                            tempDiv.innerHTML = contents.body.innerHTML;
-                            const pTags = tempDiv.querySelectorAll('p');
-                            pTags.forEach(p => {
-                                const text = p.textContent.trim();
-                                if (text) {
-                                    paragraphs.push(`<p>${text}</p>`);
-                                }
-                            });
-                            localStorage.setItem('paragraphs', JSON.stringify(paragraphs));
-                            setTimeout(() => read(paragraphs), 5000); // Start reading after 5 seconds
+                    // Parse container.xml to find the OPF file path
+                    const domParser = new DOMParser();
+                    const containerDoc = domParser.parseFromString(containerXml, 'application/xml');
+                    const rootfileElement = containerDoc.querySelector('rootfile[media-type="application/oebps-package+xml"]');
+
+                    if (rootfileElement) {
+                        opfPath = rootfileElement.getAttribute('full-path');
+                    } else {
+                        throw new Error('OPF file not found in container.xml.');
+                    }
+
+                    if (!opfPath) {
+                        throw new Error('OPF file path is empty.');
+                    }
+
+                    // Determine the base directory for content files
+                    const opfBaseDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
+
+                    // Step 2: Read content.opf
+                    const opfFile = zip.file(opfPath);
+                    if (!opfFile) {
+                        throw new Error(`OPF file not found at ${opfPath}`);
+                    }
+                    const opfXml = await opfFile.async('text');
+                    const opfDoc = domParser.parseFromString(opfXml, 'application/xml');
+
+                    // Step 3: Get HTML files from manifest
+                    const manifestItems = opfDoc.querySelectorAll('manifest item');
+                    const htmlFileHrefs = new Map(); // id -> href
+
+                    manifestItems.forEach(item => {
+                        const mediaType = item.getAttribute('media-type');
+                        const id = item.getAttribute('id');
+                        const href = item.getAttribute('href');
+                        if (mediaType === 'application/xhtml+xml' || mediaType === 'text/html') {
+                            htmlFileHrefs.set(id, href);
                         }
-
-                    }).catch(error => {
-                        console.error('Error loading section:', error);
                     });
-                });
-            };
-            reader.readAsArrayBuffer(file);
+
+                    // Step 4: Get reading order from spine
+                    const spineItemRefs = opfDoc.querySelectorAll('spine itemref');
+                    const readingOrder = Array.from(spinesItemRefs).map(itemref => itemref.getAttribute('idref'));
+
+                    // Step 5: Extract content from HTML files in reading order
+                    for (const idref of readingOrder) {
+                        const htmlRelativePath = htmlFileHrefs.get(idref);
+                        if (htmlRelativePath) {
+                            const fullHtmlPath = opfBaseDir + htmlRelativePath;
+                            const htmlFile = zip.file(fullHtmlPath);
+
+                            if (htmlFile) {
+                                const htmlContent = await htmlFile.async('text');
+                                // Parse the HTML content using DOMParser
+                                const htmlDoc = domParser.parseFromString(htmlContent, 'text/html');
+
+                                // Extract paragraphs
+                                const pTags = htmlDoc.querySelectorAll('p');
+                                pTags.forEach(p => {
+                                    const text = p.textContent.trim();
+                                    if (text) {
+                                        paragraphs.push(`<p>${text}</p>`);
+                                    }
+                                });
+                                localStorage.setItem('paragraphs', JSON.stringify(paragraphs));
+                                setTimeout(() => read(paragraphs), 5000); // Start reading after 5 seconds
+                            } else {
+                                console.warn(`HTML file not found in zip: ${fullHtmlPath}`);
+                            }
+                        } else {
+                            console.warn(`ItemRef ID '${idref}' not found in manifest.`);
+                        }
+                    }
+
+
+                };
+                reader.readAsArrayBuffer(file);
+
+            } catch (error) {
+                outputDiv.innerHTML = `Error: ${error.message}`;
+                console.error('Error processing EPUB:', error);
+            }
         }
+
         var reading = false
         document.onkeydown = (e) => {
             if (e.key === " ") {
