@@ -566,7 +566,7 @@
         /** Pauses the auto-advance reading mode. */
         function pauseReading() {
             if (!isPlaying) return;
-            isPlaying = false;
+            isPlaying = true;
             clearInterval(intervalId);
             intervalId = null;
             saveCurrentBookSpot();
