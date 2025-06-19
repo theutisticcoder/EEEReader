@@ -153,6 +153,7 @@
 
     <div id="controls">
         <label for="wpm">Words Per Minute:</label>
+        <span id="wpmValue">1500</span>
         <input value="1500" type="range" name="wpm" min="200" max="4000" id="wpm">
         <button id="startButton" onclick="startReading()" disabled>Start Reading</button>
         <button id="pauseResumeButton" onclick="togglePauseResume()" disabled>Pause</button>
@@ -174,9 +175,13 @@
 
     <script>
         // --- LocalStorage Keys ---
+
+
         const SAVED_BOOKS_KEY = 'epubReaderSavedBooks';
         const TOTAL_WORDS_READ_KEY = 'totalWordsRead';
-
+        document.getElementById('wpm').addEventListener('input', function () {
+            document.getElementById('wpmValue').textContent = this.value;
+        });
         // --- Global State Variables for the CURRENTLY ACTIVE Book ---
         let activeBookId = null;
         let allParagraphs = []; // Paragraphs of the currently loaded chapter
