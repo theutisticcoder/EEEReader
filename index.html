@@ -182,7 +182,7 @@
         let currentChapterIndex = 0; // Index of the currently loaded chapter in `chapters` array (flat index)
         let isPlaying = false; // Controls auto-advance for paragraphs (now driven by word bolding)
         let intervalId = null; // This will now be used for word bolding interval
-        const boldingSpeed = 100; // 0.1 seconds (100 milliseconds) for word bolding
+        const boldingSpeed = 60; // 0.1 seconds (100 milliseconds) for word bolding
 
         let currentWordIndex = 0; // Tracks which word is currently bolded
         let totalWordsRead = 0; // Accumulates across all books and sessions
