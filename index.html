@@ -425,7 +425,7 @@
                     intervalId = setInterval(showNextParagraph,countWords(allParagraphs[currentIndex]) * 120);
                     console.log(countWords(allParagraphs[currentIndex] * 120));
         }
-            }, parseInt(countWords(allParagraphs[currentIndex]) * 120)); // Initial delay based on first paragraph length
+            }, 1000); // Initial delay based on first paragraph length
         }
 
         function pauseReading() {
