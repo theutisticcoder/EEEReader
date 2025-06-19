@@ -167,8 +167,7 @@
 
     </div>
     <label for="wpm">Words Per Minute:</label>
-    <span id="wpmValue">1500</span>
-    <input value="1500" type="range" name="wpm" min="200" max="4000" id="wpm">
+    <input value="1500" type="number" name="wpm" min="200" max="4000" id="wpm">
     <div id="status"></div>
     <div id="wordsReadDiv"></div>
 
@@ -185,17 +184,14 @@
         const SAVED_BOOKS_KEY = 'epubReaderSavedBooks';
         const TOTAL_WORDS_READ_KEY = 'totalWordsRead';
         document.getElementById('wpm').addEventListener('input', function () {
-            document.getElementById('wpmValue').textContent = this.value;
             localStorage.setItem('wpm', this.value); // Save WPM to localStorage
         });
         // Load saved WPM from localStorage on page load
         const savedWPM = localStorage.getItem('wpm');
         if (savedWPM) {
             document.getElementById('wpm').value = savedWPM;
-            document.getElementById('wpmValue').textContent = savedWPM;
         } else {
             document.getElementById('wpm').value = 1500; // Default WPM
-            document.getElementById('wpmValue').textContent = 1500;
         }
         // --- Global State Variables for the CURRENTLY ACTIVE Book ---
         let activeBookId = null;
