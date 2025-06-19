@@ -538,9 +538,9 @@
                 showNextParagraph();
                 return;
             }
-
+            // Highlight the first word
             // Start interval for word bolding
-            intervalId = setInterval(updateBolding, document.querySelector('#wpm').value / 60 * 1000); // Convert WPM to milliseconds per word
+            intervalId = setInterval(updateBolding, 60000 / document.querySelector("#wpm").value ); // Convert WPM to milliseconds per word
         }
 
         /** Stops the word-by-word bolding animation. */
