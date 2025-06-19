@@ -367,7 +367,7 @@
         function incrementTotalWordsRead(paragraphHTML) {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = paragraphHTML;
-            totalWordsRead += wordsInParagraph;
+            const wordsInParagraph = countWords(tempDiv.textContent || tempDiv.innerText || "");
             localStorage.setItem(TOTAL_WORDS_READ_KEY, totalWordsRead.toString());
             updateTotalWordsReadDisplay();
         }
