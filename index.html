@@ -367,7 +367,6 @@
         function incrementTotalWordsRead(paragraphHTML) {
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = paragraphHTML;
-            const wordsInParagraph = countWords(tempDiv.textContent || tempDiv.innerText || "");
             totalWordsRead += wordsInParagraph;
             localStorage.setItem(TOTAL_WORDS_READ_KEY, totalWordsRead.toString());
             updateTotalWordsReadDisplay();
@@ -484,6 +483,7 @@
 
         /** Advances the word bolding within the current paragraph. */
         function updateBolding() {
+            totalWordsRead += 1; // Increment total words read for each word bolded
             const wordsSpans = outputDiv.querySelectorAll('span[data-word-index]');
             
             // Remove bold from previous word
