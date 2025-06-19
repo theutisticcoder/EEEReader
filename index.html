@@ -156,9 +156,9 @@
     </div>
 
     <div id="controls">
+
         <label for="wpm">Words Per Minute:</label>
         <input value="1500" type="number" name="wpm" min="200" max="4000" id="wpm">
-        <div id="status"></div>
         <button id="startButton" onclick="startReading()" disabled>Start Reading</button>
         <button id="pauseResumeButton" onclick="togglePauseResume()" disabled>Pause</button>
         <button id="prevButton" onclick="showPrevParagraph()" disabled>&lt; Previous</button>
@@ -168,7 +168,7 @@
         <button id="audio" onclick="location.href = 'audio.html'">Listen Instead</button>
 
     </div>
-
+    <div id="status"></div>
     <div id="wordsReadDiv"></div>
 
     <div id="chapterNav">
