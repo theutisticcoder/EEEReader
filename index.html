@@ -34,14 +34,17 @@
 
         #controls {
             margin-top: 15px;
-            display: flex; /* Make buttons align nicely */
-            flex-wrap: wrap; /* Allow buttons to wrap */
+            display: flex;
+            /* Make buttons align nicely */
+            flex-wrap: wrap;
+            /* Allow buttons to wrap */
         }
 
         #controls button {
             padding: 8px 15px;
             margin-right: 10px;
-            margin-bottom: 5px; /* Add some space below buttons */
+            margin-bottom: 5px;
+            /* Add some space below buttons */
             cursor: pointer;
         }
 
@@ -85,7 +88,8 @@
             overflow: hidden;
             text-overflow: ellipsis;
             /* Indentation for subchapters */
-            box-sizing: border-box; /* Include padding in width calculation */
+            box-sizing: border-box;
+            /* Include padding in width calculation */
         }
 
         #chapterNav button:hover {
@@ -152,7 +156,7 @@
     </div>
 
     <div id="controls">
-        
+
         <button id="startButton" onclick="startReading()" disabled>Start Reading</button>
         <button id="pauseResumeButton" onclick="togglePauseResume()" disabled>Pause</button>
         <button id="prevButton" onclick="showPrevParagraph()" disabled>&lt; Previous</button>
@@ -160,13 +164,11 @@
         <button id="resetSpotButton" onclick="resetReadingSpot()" disabled>Reset Spot (Current Book)</button>
         <button id="resetTotalWordsButton" onclick="resetTotalWordsRead()">Reset Total Words (All Books)</button>
         <button id="audio" onclick="location.href = 'audio.html'">Listen Instead</button>
-        <label for="wpm">Words Per Minute:</label>
-        <br>
-        <br>
-        <span id="wpmValue">1500</span>
-        <input value="1500" type="range" name="wpm" min="200" max="4000" id="wpm">
-    </div>
 
+    </div>
+    <label for="wpm">Words Per Minute:</label>
+    <span id="wpmValue">1500</span>
+    <input value="1500" type="range" name="wpm" min="200" max="4000" id="wpm">
     <div id="status"></div>
     <div id="wordsReadDiv"></div>
 
@@ -507,7 +509,7 @@
             localStorage.setItem(TOTAL_WORDS_READ_KEY, totalWordsRead.toString());
             updateTotalWordsReadDisplay(); // Update display of total words read
             const wordsSpans = outputDiv.querySelectorAll('span[data-word-index]');
-            
+
             // Remove bold from previous word
             if (currentWordIndex > 0 && wordsSpans[currentWordIndex - 1]) {
                 wordsSpans[currentWordIndex - 1].classList.remove('bold-word');
@@ -528,12 +530,12 @@
         function startBolding() {
             stopBolding(); // Ensure any existing bolding is stopped
             currentWordIndex = 0; // Reset word index for new paragraph
-            
+
             if (allParagraphs.length === 0) return;
 
             // Display the current paragraph with spans, which clears old highlights
-            displayCurrentParagraph(); 
-            
+            displayCurrentParagraph();
+
             const wordsInCurrentParagraph = outputDiv.querySelectorAll('span[data-word-index]').length;
             if (wordsInCurrentParagraph === 0) {
                 // If current paragraph is empty or has no words, just go to next
@@ -621,7 +623,7 @@
             displayCurrentParagraph(); // Update display
             // If auto-advance (isPlaying) is active, restart word bolding for the new paragraph
             if (isPlaying) {
-                 startBolding();
+                startBolding();
             }
         }
 
@@ -717,7 +719,7 @@
             if (navLabel && content) {
                 const title = navLabel.textContent.trim();
                 let src = content.getAttribute('src');
-                
+
                 if (src) {
                     const fullChapterHref = resolvePath(tocBaseDir, src);
                     const cleanHref = fullChapterHref.split('#')[0]; // Remove fragment identifiers
@@ -876,7 +878,7 @@
                 if (tocHref) {
                     tocBaseDir = resolvePath(opfBaseDir, tocHref); // Get full path of TOC file
                     tocBaseDir = tocBaseDir.substring(0, tocBaseDir.lastIndexOf('/') + 1); // Get its directory
-                    
+
                     const tocFile = zip.file(resolvePath(opfBaseDir, tocHref));
                     if (tocFile) {
                         tocContent = await tocFile.async('string');
@@ -893,7 +895,7 @@
                     if (navToc) {
                         // Find top-level <li> elements within the navToc
                         Array.from(navToc.children).filter(child => child.tagName === 'ol' || child.tagName === 'ul').forEach(olOrUl => {
-                             Array.from(olOrUl.children).filter(child => child.tagName === 'li').forEach(topLi => {
+                            Array.from(olOrUl.children).filter(child => child.tagName === 'li').forEach(topLi => {
                                 parseNavDocLiElements(topLi, tocBaseDir, 0, tocOrderCounter); // Start level at 0
                             });
                         });
@@ -910,16 +912,16 @@
 
                 // Fallback: If no TOC or empty TOC, use spine items as chapters (flat structure)
                 if (chapters.length === 0) {
-                     console.warn("Falling back to spine order for chapters as TOC was not found or empty.");
-                     const spineItems = opfDoc.querySelectorAll('spine itemref');
-                     let fallbackChapterCounter = 1;
-                     for (const itemRef of spineItems) {
-                         const idRef = itemRef.getAttribute('idref');
-                         const href = idToHrefMap.get(idRef); // Href is relative to OPF file
-                         if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
-                             const cleanHref = resolvePath(opfBaseDir, href);
-                             // Only add if this is a new, unique content file
-                             if (!chapters.some(ch => ch.href === cleanHref)) {
+                    console.warn("Falling back to spine order for chapters as TOC was not found or empty.");
+                    const spineItems = opfDoc.querySelectorAll('spine itemref');
+                    let fallbackChapterCounter = 1;
+                    for (const itemRef of spineItems) {
+                        const idRef = itemRef.getAttribute('idref');
+                        const href = idToHrefMap.get(idRef); // Href is relative to OPF file
+                        if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
+                            const cleanHref = resolvePath(opfBaseDir, href);
+                            // Only add if this is a new, unique content file
+                            if (!chapters.some(ch => ch.href === cleanHref)) {
                                 chapters.push({
                                     title: `Chapter ${fallbackChapterCounter++}`,
                                     href: cleanHref,
@@ -927,9 +929,9 @@
                                     level: 0, // No hierarchy in fallback
                                     tocOrder: tocOrderCounter.value++
                                 });
-                             }
-                         }
-                     }
+                            }
+                        }
+                    }
                 }
 
                 // Sort chapters by tocOrder to ensure correct reading order even if TOC parsing was out of order
