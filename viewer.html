@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script>
+</head>
+
+<body>
+    <div id="book"></div>
+    <script>
+        // Load the EPUB file
+        var book = ePub("path/to/your/book.epub");
+
+        // Render the book in the div with id "book"
+        book.renderTo("book").then(function () {
+            console.log("Book rendered successfully!");
+        }).catch(function (error) {
+            console.error("Error rendering book:", error);
+        });
+        </script>
+
+</body>
+
+</html>

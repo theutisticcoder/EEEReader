@@ -34,6 +34,19 @@
 
         #controls {
             margin-top: 15px;
+            display: flex; /* Make buttons align nicely */
+            flex-wrap: wrap; /* Allow buttons to wrap */
+        }
+
+        #controls button {
+            padding: 8px 15px;
+            margin-right: 10px;
+            margin-bottom: 5px; /* Add some space below buttons */
+            cursor: pointer;
+        }
+
+        input[type="file"] {
+            margin-right: 10px;
         }
 
         #status {
@@ -45,16 +58,6 @@
             margin-top: 10px;
             font-style: italic;
             color: #555;
-        }
-
-        button {
-            padding: 8px 15px;
-            margin-right: 10px;
-            cursor: pointer;
-        }
-
-        input[type="file"] {
-            margin-right: 10px;
         }
 
         #chapterNav {
@@ -125,6 +128,11 @@
             margin-left: 5px;
             padding: 5px 10px;
         }
+
+        /* New style for bolding effect */
+        .bold-word {
+            font-weight: bold;
+        }
     </style>
 </head>
 
@@ -172,11 +180,11 @@
         let allParagraphs = []; // Paragraphs of the currently loaded chapter
         let currentIndex = 0; // Current paragraph index within the loaded chapter
         let currentChapterIndex = 0; // Index of the currently loaded chapter in `chapters` array (flat index)
-        let isPlaying = false; // Controls auto-advance for paragraphs (timer-based)
-        let intervalId = null; // ID for the setInterval timer
-        const displayInterval = 5000; // 5 seconds between paragraphs for timer auto-advance
-        const initialDelay = 2000; // 2 seconds before starting timer auto-advance
+        let isPlaying = false; // Controls auto-advance for paragraphs (now driven by word bolding)
+        let intervalId = null; // This will now be used for word bolding interval
+        const boldingSpeed = 100; // 0.1 seconds (100 milliseconds) for word bolding
 
+        let currentWordIndex = 0; // Tracks which word is currently bolded
         let totalWordsRead = 0; // Accumulates across all books and sessions
         let chapters = []; // Flat list of all leaf chapters of the CURRENTLY ACTIVE book, with hierarchy info
 
@@ -268,6 +276,7 @@
             statusDiv.textContent = '';
             chapterNavDiv.innerHTML = '<h2>Chapters:</h2>';
             chapterNavDiv.style.display = 'none';
+            stopBolding(); // Ensure bolding is stopped when display is cleared
             allParagraphs = []; // Clear content
             chapters = []; // Clear chapter data
             activeBookId = null; // No active book
@@ -407,7 +416,8 @@
         async function loadChapter(chapterIndex) {
             if (chapterIndex < 0 || chapterIndex >= chapters.length) return;
 
-            pauseReading(); // Also pause auto-advance timer
+            pauseReading(); // Pause auto-advance timer
+            stopBolding(); // Stop word bolding
 
             currentChapterIndex = chapterIndex;
             currentIndex = 0; // Always start at the beginning of the new chapter
@@ -419,10 +429,111 @@
             saveCurrentBookSpot(); // Save the new chapter and paragraph spot for this book
         }
 
-        // --- Paragraph Display and Navigation ---
+        // --- Word Bolding and Paragraph Display ---
+
+        /** Clears any existing word highlights in the output div. */
+        function clearHighlights() {
+            const highlightedSpans = outputDiv.querySelectorAll('.bold-word');
+            highlightedSpans.forEach(span => {
+                span.classList.remove('bold-word');
+            });
+        }
+
+        /**
+         * Prepares a paragraph's HTML for highlighting by wrapping each word in a span.
+         * @param {string} paragraphHtml - The original HTML content of the paragraph.
+         * @returns {string} The paragraph HTML with words wrapped in spans.
+         */
+        function getParagraphWithSpans(paragraphHtml) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = paragraphHtml;
+            const plainText = tempDiv.textContent || tempDiv.innerText || '';
+
+            // This regex attempts to split by word boundaries, including punctuation attached to words.
+            const words = plainText.match(/\b(\w+)\b|[^\s\w]+/g) || [];
+
+            let htmlWithSpans = '';
+            let charIndex = 0; // Tracks position in the plainText
+
+            for (let i = 0; i < words.length; i++) {
+                const word = words[i];
+                const originalIndex = plainText.indexOf(word, charIndex);
+
+                if (originalIndex === -1) { // Fallback, shouldn't happen with robust regex
+                    htmlWithSpans += word;
+                    charIndex += word.length;
+                    continue;
+                }
+
+                // Add any non-word characters (like leading spaces or punctuation) before the word
+                if (originalIndex > charIndex) {
+                    htmlWithSpans += plainText.substring(charIndex, originalIndex);
+                }
+
+                // Wrap the word
+                htmlWithSpans += `<span data-word-index="${i}">${word}</span>`;
+                charIndex = originalIndex + word.length;
+            }
+            // Add any remaining text (e.g., trailing spaces)
+            htmlWithSpans += plainText.substring(charIndex);
+
+            return htmlWithSpans;
+        }
+
+        /** Advances the word bolding within the current paragraph. */
+        function updateBolding() {
+            const wordsSpans = outputDiv.querySelectorAll('span[data-word-index]');
+            
+            // Remove bold from previous word
+            if (currentWordIndex > 0 && wordsSpans[currentWordIndex - 1]) {
+                wordsSpans[currentWordIndex - 1].classList.remove('bold-word');
+            }
+
+            // Bold the current word
+            if (currentWordIndex < wordsSpans.length) {
+                wordsSpans[currentWordIndex].classList.add('bold-word');
+                currentWordIndex++;
+            } else {
+                // End of paragraph, move to next
+                stopBolding(); // Stop bolding for this paragraph
+                showNextParagraph(); // Advance to the next paragraph
+            }
+        }
+
+        /** Starts the word-by-word bolding animation. */
+        function startBolding() {
+            stopBolding(); // Ensure any existing bolding is stopped
+            currentWordIndex = 0; // Reset word index for new paragraph
+            
+            if (allParagraphs.length === 0) return;
+
+            // Display the current paragraph with spans, which clears old highlights
+            displayCurrentParagraph(); 
+            
+            const wordsInCurrentParagraph = outputDiv.querySelectorAll('span[data-word-index]').length;
+            if (wordsInCurrentParagraph === 0) {
+                // If current paragraph is empty or has no words, just go to next
+                showNextParagraph();
+                return;
+            }
+
+            // Start interval for word bolding
+            intervalId = setInterval(updateBolding, boldingSpeed);
+        }
+
+        /** Stops the word-by-word bolding animation. */
+        function stopBolding() {
+            clearInterval(intervalId);
+            intervalId = null;
+            clearHighlights(); // Clear all highlights
+            currentWordIndex = 0; // Reset word index
+        }
+
 
         /** Displays the paragraph at the current `currentIndex`. */
         function displayCurrentParagraph() {
+            clearHighlights(); // Clear highlights from previous paragraph
+
             if (allParagraphs.length === 0) {
                 outputDiv.textContent = "No paragraphs to display for this chapter.";
                 return;
@@ -431,16 +542,20 @@
             if (currentIndex >= allParagraphs.length) currentIndex = allParagraphs.length - 1;
 
             const currentParagraphHTML = allParagraphs[currentIndex];
-            outputDiv.innerHTML = currentParagraphHTML;
+            // Prepare paragraph for highlighting by wrapping words in spans
+            outputDiv.innerHTML = getParagraphWithSpans(currentParagraphHTML);
 
-            incrementTotalWordsRead(currentParagraphHTML);
+            incrementTotalWordsRead(currentParagraphHTML); // Increment total words read for this paragraph
 
-            saveCurrentBookSpot(); // Save spot every time paragraph changes
+            saveCurrentBookSpot(); // Save spot for the current book
             updateStatus();
         }
 
         /** Moves to and displays the next paragraph or chapter. */
         function showNextParagraph() {
+            // Stop current bolding before moving to the next paragraph
+            stopBolding();
+
             if (currentIndex < allParagraphs.length - 1) {
                 currentIndex++;
             } else {
@@ -456,14 +571,17 @@
                 }
             }
             displayCurrentParagraph(); // Update display
-            // If auto-advance (timer-based) was active, restart the interval
+            // If auto-advance (isPlaying) is active, restart word bolding for the new paragraph
             if (isPlaying) {
-                startReading(); // This will clear and restart the interval
+                startBolding();
             }
         }
 
         /** Moves to and displays the previous paragraph or chapter. */
         function showPrevParagraph() {
+            // Stop current bolding before moving to the previous paragraph
+            stopBolding();
+
             if (currentIndex > 0) {
                 currentIndex--;
             } else {
@@ -477,53 +595,38 @@
                 }
             }
             displayCurrentParagraph(); // Update display
-            // If auto-advance (timer-based) was active, restart the interval
+            // If auto-advance (isPlaying) is active, restart word bolding for the new paragraph
             if (isPlaying) {
-                 startReading(); // This will clear and restart the interval
+                 startBolding();
             }
         }
 
         // --- Reading Controls ---
 
-        /** Initiates or restarts the timer-based auto-advance reading mode. */
+        /** Initiates or restarts the auto-advance reading mode. */
         function startReading() {
             if (isPlaying || allParagraphs.length === 0) return;
 
-            // Clear any existing interval before setting a new one
-            clearInterval(intervalId);
-            intervalId = null;
-
             isPlaying = true;
             updateStatus();
-            // Display the current paragraph immediately (it also saves spot and updates word count)
-            displayCurrentParagraph();
-
-            // Initial delay before starting the interval for the next paragraph
-            setTimeout(() => {
-                if (isPlaying) { // Check again in case user paused during delay
-                    intervalId = setInterval(showNextParagraph, displayInterval);
-                }
-            }, initialDelay);
+            startBolding(); // Start the word-by-word bolding
         }
 
-        /** Pauses the timer-based auto-advance reading mode. */
+        /** Pauses the auto-advance reading mode. */
         function pauseReading() {
             if (!isPlaying) return;
             isPlaying = false;
-            clearInterval(intervalId);
-            intervalId = null;
+            stopBolding(); // Stop word bolding
             saveCurrentBookSpot();
             updateStatus();
         }
 
-        /** Resumes the timer-based auto-advance reading mode. */
+        /** Resumes the auto-advance reading mode. */
         function resumeReading() {
             if (isPlaying || allParagraphs.length === 0) return;
             isPlaying = true;
             updateStatus();
-            // Display current paragraph again and restart interval for next one
-            displayCurrentParagraph();
-            intervalId = setInterval(showNextParagraph, displayInterval);
+            startBolding(); // Resume word bolding
         }
 
         /** Toggles between pause and resume for auto-advance. */
@@ -872,6 +975,7 @@
         // --- Load a previously saved book into the reader ---
         async function loadBookDataIntoReader(book) {
             pauseReading(); // Stop any currently playing book
+            stopBolding(); // Stop any active bolding
 
             activeBookId = book.id;
             chapters = book.chapters; // Load the detailed chapters array
@@ -958,6 +1062,7 @@
                     currentIndex = 0;
                     currentChapterIndex = 0;
                     pauseReading(); // Stop any active reading
+                    stopBolding(); // Stop bolding
                     clearReaderDisplay();
                     disableControls();
                     updateStatus();
@@ -977,6 +1082,7 @@
                 currentIndex = 0;
                 currentChapterIndex = 0;
                 pauseReading();
+                stopBolding();
                 clearReaderDisplay();
                 disableControls();
                 updateStatus();
@@ -1029,7 +1135,10 @@
 
         // --- Event Listeners for Initial Load and Unload ---
         window.addEventListener('load', initializeReader);
-        window.addEventListener('beforeunload', saveCurrentBookSpot); // Save current book's spot when leaving
+        window.addEventListener('beforeunload', () => {
+            saveCurrentBookSpot(); // Save current book's spot when leaving the page
+            stopBolding(); // Stop bolding when leaving the page
+        });
     </script>
 </body>
 
