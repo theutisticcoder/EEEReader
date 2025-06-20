@@ -550,7 +550,6 @@
 
         /** Moves to and displays the next paragraph or chapter. */
         function showNextParagraph() {
-            stopSpeech(); // Stop speech when manually advancing or preparing for next paragraph
             if (currentIndex < allParagraphs.length - 1) {
                 currentIndex++;
             } else {
@@ -567,7 +566,7 @@
             }
             displayCurrentParagraph(); // Update display
             // If auto-advance (timer-based) was active and speech is not, restart the interval
-            if (isPlaying && !isSpeaking) {
+            if (isPlaying) {
                 startReading(); // This will clear and restart the interval
             }
         }
