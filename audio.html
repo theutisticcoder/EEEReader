@@ -197,7 +197,9 @@
 
     <div id="output"></div>
 
-    <script>
+    <script type="module">
+      import edgeTtsClient from 'https://cdn.jsdelivr.net/npm/edge-tts-client@1.0.2/+esm';
+
         // --- LocalStorage Keys ---
         const SAVED_BOOKS_KEY = 'epubReaderSavedBooks';
         const TOTAL_WORDS_READ_KEY = 'totalWordsRead';
@@ -646,23 +648,20 @@
             if (allParagraphs.length === 0) return;
 
             // If speech is currently playing or paused, the spacebar controls speech
-            if (window.speechSynthesis.speaking || window.speechSynthesis.paused) {
-                if (window.speechSynthesis.paused) {
-                    window.speechSynthesis.resume();
+                if (!isSpeaking) {
+                    edgeTtsClient.speak(utterance.text, {
+                        voice: "Microsoft Andrew Online (Natural) - English (United States)",
+                        rate: parseFloat(rateInput.value),
+                        pitch: parseFloat(pitchInput.value),
+                        volume: parseFloat(volumeInput.value)
+                    });
                     isSpeaking = true; // Ensure state is correct
                 } else {
-                    window.speechSynthesis.pause();
+                    edgeTtsClient.stop();
                     isSpeaking = false;
                 }
                 updateStatus();
-            } else {
-                // Otherwise, it controls the timer-based auto-advance
-                if (isPlaying) {
-                    pauseReading();
-                } else {
-                    resumeReading();
-                }
-            }
+            
         }
 
         /** Resets the reading spot for the currently loaded book to the beginning. */
@@ -859,7 +858,7 @@
 
         /** Plays the audio for the current paragraph. */
         function playCurrentParagraphAudio() {
-            if (allParagraphs.length === 0 || window.speechSynthesis.speaking) return;
+            if (allParagraphs.length === 0) return;
 
             pauseReading(); // Pause timer-based auto-advance when starting speech
 
@@ -868,23 +867,26 @@
                 console.warn("No text to speak for current paragraph.");
                 return;
             }
-
-            window.speechSynthesis.cancel(); // Cancel any previous speech
+            edgeTtsClient.stop(); // Stop any ongoing speech before starting new one
             clearHighlights(); // Ensure no leftover highlights
 
             updateTtsUtteranceSettings(); // Apply current settings
             utterance.text = currentParagraphText;
 
-            window.speechSynthesis.speak(utterance);
+            edgeTtsClient.speak(utterance.text, {
+                voice: "Microsoft Andrew Online (Natural) - English (United States)",
+                rate: parseFloat(rateInput.value),
+                pitch: parseFloat(pitchInput.value),
+                volume: parseFloat(volumeInput.value)
+            });
             isSpeaking = true;
             updateStatus();
         }
 
         /** Stops any ongoing speech. */
         function stopSpeech() {
-            if (window.speechSynthesis.speaking || window.speechSynthesis.paused) {
-                window.speechSynthesis.cancel();
-            }
+            if (!isSpeaking) return;
+            edgeTtsClient.stop(); // Stop any ongoing speech
             isSpeaking = false;
             clearHighlights();
             updateStatus();
