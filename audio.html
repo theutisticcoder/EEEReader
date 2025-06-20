@@ -550,8 +550,11 @@
 
         /** Moves to and displays the next paragraph or chapter. */
         function showNextParagraph() {
+            stopSpeech(); // Stop speech when manually going forward
             if (currentIndex < allParagraphs.length - 1) {
                 currentIndex++;
+                togglePauseResume(); // Pause speech if it was playing
+                
             } else {
                 // End of current chapter, try to go to next chapter
                 if (currentChapterIndex < chapters.length - 1) {
