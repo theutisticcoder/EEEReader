@@ -646,7 +646,7 @@
 
             // If speech is currently playing or paused, the spacebar controls speech
                 if (!isSpeaking) {
-                    edgeTtsClient.speak(utterance.text, {
+                    edgeTtsClient.speak(allParagraphs[currentIndex].innerText, {
                         voice: "Microsoft Andrew Online (Natural) - English (United States)",
                         rate: parseFloat(rateInput.value),
                         pitch: parseFloat(pitchInput.value),
