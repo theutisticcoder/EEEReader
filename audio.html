@@ -614,11 +614,7 @@
             displayCurrentParagraph();
 
             // Initial delay before starting the interval for the next paragraph
-            setTimeout(() => {
-                if (isPlaying) { // Check again in case user paused during delay
-                    intervalId = setInterval(showNextParagraph, displayInterval);
-                }
-            }, initialDelay);
+          
         }
 
         /** Pauses the timer-based auto-advance reading mode. */
