@@ -1,10 +1,8 @@
 <!DOCTYPE html>
 <html>
-
 <head>
     <title>EEEReader Audio</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@andresaya/edge-tts@1.2.4/dist/index.min.js"></script>
     <style>
         body {
             font-family: sans-serif;
@@ -95,8 +93,7 @@
             overflow: hidden;
             text-overflow: ellipsis;
             /* Indentation for subchapters */
-            box-sizing: border-box;
-            /* Include padding in width calculation */
+            box-sizing: border-box; /* Include padding in width calculation */
         }
 
         #chapterNav button:hover {
@@ -166,6 +163,8 @@
     </div>
 
     <div id="ttsControls">
+        <label for="voiceSelect">Voice:</label>
+        <select id="voiceSelect"></select>
 
         <label for="rate">Rate:</label>
         <input type="range" id="rate" min="0.5" max="2" value="1" step="0.1">
@@ -199,7 +198,6 @@
     <div id="output"></div>
 
     <script>
-        var tts = new EdgeTTS();
         // --- LocalStorage Keys ---
         const SAVED_BOOKS_KEY = 'epubReaderSavedBooks';
         const TOTAL_WORDS_READ_KEY = 'totalWordsRead';
@@ -241,6 +239,7 @@
         const resetSpotButton = document.getElementById('resetSpotButton');
         const resetTotalWordsButton = document.getElementById('resetTotalWordsButton');
 
+        const voiceSelect = document.getElementById('voiceSelect');
         const rateInput = document.getElementById('rate');
         const pitchInput = document.getElementById('pitch');
         const volumeInput = document.getElementById('volume');
@@ -591,7 +590,7 @@
             displayCurrentParagraph(); // Update display
             // If auto-advance (timer-based) was active and speech is not, restart the interval
             if (isPlaying && !isSpeaking) {
-                startReading(); // This will clear and restart the interval
+                 startReading(); // This will clear and restart the interval
             }
         }
 
@@ -647,20 +646,23 @@
             if (allParagraphs.length === 0) return;
 
             // If speech is currently playing or paused, the spacebar controls speech
-            if (!isSpeaking) {
-                tts.synthesize(currentParagraphText, "Microsoft Andrew Online (Natural) - English (United States)",
-                    {
-                    rate: parseFloat(rateInput.value),
-                    pitch: parseFloat(pitchInput.value),
-                    volume: parseFloat(volumeInput.value)
-                });
-                isSpeaking = true; // Ensure state is correct
+            if (window.speechSynthesis.speaking || window.speechSynthesis.paused) {
+                if (window.speechSynthesis.paused) {
+                    window.speechSynthesis.resume();
+                    isSpeaking = true; // Ensure state is correct
+                } else {
+                    window.speechSynthesis.pause();
+                    isSpeaking = false;
+                }
+                updateStatus();
             } else {
-                tts.stop();
-                isSpeaking = false;
+                // Otherwise, it controls the timer-based auto-advance
+                if (isPlaying) {
+                    pauseReading();
+                } else {
+                    resumeReading();
+                }
             }
-            updateStatus();
-
         }
 
         /** Resets the reading spot for the currently loaded book to the beginning. */
@@ -712,8 +714,8 @@
             const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
 
             if (englishVoices.length === 0) {
-                console.warn("No English voices found. Displaying all available voices.");
-                englishVoices.push(...voices); // Fallback to all voices
+                 console.warn("No English voices found. Displaying all available voices.");
+                 englishVoices.push(...voices); // Fallback to all voices
             }
 
             englishVoices.forEach((voice) => {
@@ -739,8 +741,8 @@
             }
             // Fallback if no specific voice selected or found
             if (!currentVoice && englishVoices.length > 0) {
-                currentVoice = englishVoices[0];
-                voiceSelect.value = englishVoices[0].name; // Set dropdown to the default
+                 currentVoice = englishVoices[0];
+                 voiceSelect.value = englishVoices[0].name; // Set dropdown to the default
             } else if (!currentVoice && voices.length > 0) {
                 currentVoice = voices[0];
                 voiceSelect.value = voices[0].name;
@@ -752,14 +754,19 @@
 
         // Event listener for voices loading (important for browser compatibility)
         if (window.speechSynthesis) {
+            window.speechSynthesis.onvoiceschanged = populateVoiceList;
             // Also call it immediately if voices are already loaded
-
+            if (window.speechSynthesis.getVoices().length > 0) {
+                populateVoiceList();
+            }
         } else {
             console.error("Web Speech API (Speech Synthesis) not supported in this browser.");
             playAudioButton.disabled = true;
+            voiceSelect.disabled = true;
             rateInput.disabled = true;
             pitchInput.disabled = true;
             volumeInput.disabled = true;
+            voiceSelect.innerHTML = '<option>TTS Not Supported</option>';
         }
 
         /** Updates the settings of the SpeechSynthesisUtterance object. */
@@ -780,7 +787,7 @@
                     clearHighlights();
                     updateStatus();
                 };
-                // Highlight words as they are spoken
+                 // Highlight words as they are spoken
                 utterance.onboundary = (event) => {
                     // Only process word boundaries
                     if (event.name === 'word') {
@@ -808,7 +815,7 @@
                                 currentSpanCharOffset += spanText.length;
                                 // Account for space between words if current span is not the last
                                 if (i < wordsSpans.length - 1) {
-                                    currentSpanCharOffset += 1; // Assuming single space for simplicity
+                                     currentSpanCharOffset += 1; // Assuming single space for simplicity
                                 }
                             }
                         }
@@ -817,7 +824,19 @@
             }
 
             // Apply voice settings
-
+            const selectedVoiceName = voiceSelect.value;
+            const selectedVoiceOption = Array.from(voiceSelect.options).find(option => option.value === selectedVoiceName);
+            if (selectedVoiceOption) {
+                currentVoice = voices.find(v => v.name === selectedVoiceOption.value && v.lang === selectedVoiceOption.dataset.lang);
+                if (currentVoice) {
+                    utterance.voice = currentVoice;
+                } else {
+                    console.warn(`Selected voice '${selectedVoiceName}' not found.`);
+                    utterance.voice = null;
+                }
+            } else {
+                 utterance.voice = null;
+            }
 
             utterance.rate = parseFloat(rateInput.value);
             utterance.pitch = parseFloat(pitchInput.value);
@@ -833,13 +852,14 @@
         }
 
         // Add listeners for TTS controls
+        voiceSelect.addEventListener('change', updateTtsUtteranceSettings);
         rateInput.addEventListener('input', updateTtsUtteranceSettings);
         pitchInput.addEventListener('input', updateTtsUtteranceSettings);
         volumeInput.addEventListener('input', updateTtsUtteranceSettings);
 
         /** Plays the audio for the current paragraph. */
         function playCurrentParagraphAudio() {
-            if (allParagraphs.length === 0) return;
+            if (allParagraphs.length === 0 || window.speechSynthesis.speaking) return;
 
             pauseReading(); // Pause timer-based auto-advance when starting speech
 
@@ -848,25 +868,23 @@
                 console.warn("No text to speak for current paragraph.");
                 return;
             }
-            tts.stop(); // Stop any ongoing speech before starting new one
+
+            window.speechSynthesis.cancel(); // Cancel any previous speech
             clearHighlights(); // Ensure no leftover highlights
 
             updateTtsUtteranceSettings(); // Apply current settings
             utterance.text = currentParagraphText;
-tts.synthesize(currentParagraphText, "Microsoft Andrew Online (Natural) - English (United States)",
-                    {
-                    rate: parseFloat(rateInput.value),
-                    pitch: parseFloat(pitchInput.value),
-                    volume: parseFloat(volumeInput.value)
-                });
+
+            window.speechSynthesis.speak(utterance);
             isSpeaking = true;
             updateStatus();
         }
 
         /** Stops any ongoing speech. */
         function stopSpeech() {
-            if (!isSpeaking) return;
-            tts.stop(); // Stop any ongoing speech
+            if (window.speechSynthesis.speaking || window.speechSynthesis.paused) {
+                window.speechSynthesis.cancel();
+            }
             isSpeaking = false;
             clearHighlights();
             updateStatus();
@@ -897,7 +915,7 @@ tts.synthesize(currentParagraphText, "Microsoft Andrew Online (Natural) - Englis
             if (navLabel && content) {
                 const title = navLabel.textContent.trim();
                 let src = content.getAttribute('src');
-
+                
                 if (src) {
                     const fullChapterHref = resolvePath(tocBaseDir, src);
                     const cleanHref = fullChapterHref.split('#')[0]; // Remove fragment identifiers
@@ -1057,7 +1075,7 @@ tts.synthesize(currentParagraphText, "Microsoft Andrew Online (Natural) - Englis
                 if (tocHref) {
                     tocBaseDir = resolvePath(opfBaseDir, tocHref); // Get full path of TOC file
                     tocBaseDir = tocBaseDir.substring(0, tocBaseDir.lastIndexOf('/') + 1); // Get its directory
-
+                    
                     const tocFile = zip.file(resolvePath(opfBaseDir, tocHref));
                     if (tocFile) {
                         tocContent = await tocFile.async('string');
@@ -1074,7 +1092,7 @@ tts.synthesize(currentParagraphText, "Microsoft Andrew Online (Natural) - Englis
                     if (navToc) {
                         // Find top-level <li> elements within the navToc
                         Array.from(navToc.children).filter(child => child.tagName === 'ol' || child.tagName === 'ul').forEach(olOrUl => {
-                            Array.from(olOrUl.children).filter(child => child.tagName === 'li').forEach(topLi => {
+                             Array.from(olOrUl.children).filter(child => child.tagName === 'li').forEach(topLi => {
                                 parseNavDocLiElements(topLi, tocBaseDir, 0, tocOrderCounter); // Start level at 0
                             });
                         });
@@ -1091,16 +1109,16 @@ tts.synthesize(currentParagraphText, "Microsoft Andrew Online (Natural) - Englis
 
                 // Fallback: If no TOC or empty TOC, use spine items as chapters (flat structure)
                 if (chapters.length === 0) {
-                    console.warn("Falling back to spine order for chapters as TOC was not found or empty.");
-                    const spineItems = opfDoc.querySelectorAll('spine itemref');
-                    let fallbackChapterCounter = 1;
-                    for (const itemRef of spineItems) {
-                        const idRef = itemRef.getAttribute('idref');
-                        const href = idToHrefMap.get(idRef); // Href is relative to OPF file
-                        if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
-                            const cleanHref = resolvePath(opfBaseDir, href);
-                            // Only add if this is a new, unique content file
-                            if (!chapters.some(ch => ch.href === cleanHref)) {
+                     console.warn("Falling back to spine order for chapters as TOC was not found or empty.");
+                     const spineItems = opfDoc.querySelectorAll('spine itemref');
+                     let fallbackChapterCounter = 1;
+                     for (const itemRef of spineItems) {
+                         const idRef = itemRef.getAttribute('idref');
+                         const href = idToHrefMap.get(idRef); // Href is relative to OPF file
+                         if (href && (href.endsWith('.xhtml') || href.endsWith('.html'))) {
+                             const cleanHref = resolvePath(opfBaseDir, href);
+                             // Only add if this is a new, unique content file
+                             if (!chapters.some(ch => ch.href === cleanHref)) {
                                 chapters.push({
                                     title: `Chapter ${fallbackChapterCounter++}`,
                                     href: cleanHref,
@@ -1108,9 +1126,9 @@ tts.synthesize(currentParagraphText, "Microsoft Andrew Online (Natural) - Englis
                                     level: 0, // No hierarchy in fallback
                                     tocOrder: tocOrderCounter[0]++
                                 });
-                            }
-                        }
-                    }
+                             }
+                         }
+                     }
                 }
 
                 // Sort chapters by tocOrder to ensure correct reading order even if TOC parsing was out of order
