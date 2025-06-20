@@ -550,11 +550,9 @@
 
         /** Moves to and displays the next paragraph or chapter. */
         function showNextParagraph() {
-            stopSpeech(); // Stop speech when manually going forward
+            stopSpeech(); // Stop speech when manually advancing or preparing for next paragraph
             if (currentIndex < allParagraphs.length - 1) {
                 currentIndex++;
-                togglePauseResume(); // Pause speech if it was playing
-                
             } else {
                 // End of current chapter, try to go to next chapter
                 if (currentChapterIndex < chapters.length - 1) {
@@ -569,7 +567,7 @@
             }
             displayCurrentParagraph(); // Update display
             // If auto-advance (timer-based) was active and speech is not, restart the interval
-            if (isPlaying) {
+            if (isPlaying && !isSpeaking) {
                 startReading(); // This will clear and restart the interval
             }
         }
@@ -602,12 +600,25 @@
         function startReading() {
             if (isPlaying || allParagraphs.length === 0) return;
 
-          isPlaying = true;
+            // If speech is active, stop it and rely on the auto-advance timer
+            if (isSpeaking) {
+                stopSpeech();
+            }
+            // Clear any existing interval before setting a new one
+            clearInterval(intervalId);
+            intervalId = null;
+
+            isPlaying = true;
             updateStatus();
             // Display the current paragraph immediately (it also saves spot and updates word count)
+            displayCurrentParagraph();
 
             // Initial delay before starting the interval for the next paragraph
-          
+            setTimeout(() => {
+                if (isPlaying) { // Check again in case user paused during delay
+                    intervalId = setInterval(showNextParagraph, displayInterval);
+                }
+            }, initialDelay);
         }
 
         /** Pauses the timer-based auto-advance reading mode. */
