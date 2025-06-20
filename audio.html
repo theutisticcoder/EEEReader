@@ -3,6 +3,7 @@
 <head>
     <title>EEEReader Audio</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/edge-tts-client@1.0.2/dist/edge-tts-client.min.js"></script>
     <style>
         body {
             font-family: sans-serif;
@@ -195,8 +196,7 @@
 
     <div id="output"></div>
 
-    <script type="module">
-      import edgeTtsClient from 'https://cdn.jsdelivr.net/npm/edge-tts-client@1.0.2/+esm';
+    <script>
 
         // --- LocalStorage Keys ---
         const SAVED_BOOKS_KEY = 'epubReaderSavedBooks';
