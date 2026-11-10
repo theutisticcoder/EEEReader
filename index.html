@@ -381,14 +381,26 @@
                 basePath += '/';
             }
             try {
-                const resolvedUrl = new URL(relativePath, 'dummy://' + basePath);
+                const resolvedUrl = new URL(relativePath, 'dummy:///' + basePath);
                 let path = resolvedUrl.pathname;
                 if (path.startsWith('/')) path = path.substring(1);
-                return path.split('#')[0];
+                return decodeURIComponent(path.split('#')[0]);
             } catch (e) {
                 console.error("Path resolution error:", e);
                 return relativePath.split('#')[0];
             }
+        }
+
+        // Helper to locate a file in JSZip ignoring case or leading slashes
+        function findZipFile(zip, filePath) {
+            let cleanPath = filePath.replace(/^\//, '').trim();
+            let file = zip.file(cleanPath);
+            if (file) return file;
+
+            // Fallback: Case-insensitive search across zip entries
+            const lowerPath = cleanPath.toLowerCase();
+            const foundKey = Object.keys(zip.files).find(key => key.toLowerCase() === lowerPath);
+            return foundKey ? zip.file(foundKey) : null;
         }
 
         // Safe DOM Parser helper for XML/HTML handling namespaces smoothly
@@ -969,7 +981,7 @@
 
                 // --- Populate Raw Paragraphs for Each Chapter ---
                 for (let chapter of chapters) {
-                    const htmlFile = zip.file(chapter.href);
+                    const htmlFile = findZipFile(zip, chapter.href);
                     if (htmlFile) {
                         const content = await htmlFile.async("text");
                         const doc = parseHtml(content);
